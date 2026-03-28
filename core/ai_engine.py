@@ -1,0 +1,28 @@
+import os
+import google.generativeai as genai
+from dotenv import load_dotenv
+from datetime import datetime
+
+# Load environment variables and configure the AI
+load_dotenv()
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+model = genai.GenerativeModel('gemini-2.5-flash')
+
+def generate_reading(name, gender, city, birth_year, pillars):
+    """Constructs the prompt and fetches the AI reading."""
+    current_age = datetime.now().year - birth_year
+    
+    prompt = f"""
+    You are a master of Bazi (Four Pillars of Destiny). 
+    A {gender} named {name} born in {city} has the following pillars:
+    Year: {pillars['year']}, Month: {pillars['month']}, Day: {pillars['day']}, Hour: {pillars['hour']}. 
+    They are currently {current_age} years old.
+    
+    Provide a 3-paragraph reading:
+    Paragraph 1: Analyze their primary elements and day master.
+    Paragraph 2: Provide insights into their optimal career path.
+    Paragraph 3: Look at their current age and provide life advice based on Bazi philosophy.
+    """
+    
+    response = model.generate_content(prompt)
+    return response.text

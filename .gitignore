@@ -1,0 +1,10 @@
+# Ignore Environment Variables (API Keys)
+.env
+
+# Ignore Local Databases (Privacy)
+*.db
+*.sqlite3
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
