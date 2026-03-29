@@ -97,15 +97,33 @@ if st.button("Calculate & Save Bazi Chart", type="primary"):
         except Exception as e:
             st.error(f"System Error: {e}")
 
-# 3. Sidebar History (Reads from DB)
-st.sidebar.title("📜 Database History")
-db = next(get_db())
-history = get_recent_readings(db)
+# 3. Sidebar History (Admin Locked)
+st.sidebar.title("🔒 Admin Access")
+st.sidebar.markdown("Enter password to view user history.")
 
-if history:
-    for record in history:
-        with st.sidebar.expander(f"👤 {record.name} ({record.birth_date[:4]})"):
-            st.markdown(f"**Pillars:** {record.pillars}")
-            st.caption(record.ai_reading[:150] + "...")
-else:
-    st.sidebar.info("Database is empty. Generate a reading!")
+# The type="password" hides the text as they type!
+admin_attempt = st.sidebar.text_input("Password", type="password")
+
+# Fetch the real password from our secure environment variables
+import os
+CORRECT_PASSWORD = os.getenv("ADMIN_PASSWORD")
+
+# Only run the database query IF the password matches
+if admin_attempt == CORRECT_PASSWORD:
+    st.sidebar.success("Database Unlocked")
+    st.sidebar.subheader("📜 Reading History")
+    
+    db = next(get_db())
+    history = get_recent_readings(db)
+
+    if history:
+        for record in history:
+            with st.sidebar.expander(f"👤 {record.name} ({record.birth_date[:4]})"):
+                st.markdown(f"**Pillars:** {record.pillars}")
+                st.caption(record.ai_reading[:150] + "...")
+    else:
+        st.sidebar.info("Database is empty. Generate a reading!")
+elif admin_attempt:
+    # If they typed something, but it's wrong, show an error.
+    st.sidebar.error("Incorrect password.")
+
