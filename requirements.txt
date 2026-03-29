@@ -1,0 +1,8 @@
+streamlit
+python-dotenv
+lunar-python
+google-generativeai
+geopy
+timezonefinder
+pytz
+SQLAlchemy
