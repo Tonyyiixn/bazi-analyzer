@@ -26,3 +26,23 @@ def generate_reading(name, gender, city, birth_year, pillars):
     
     response = model.generate_content(prompt)
     return response.text
+
+def generate_yearly_prediction(name, gender, pillars, current_year=2026):
+    """Generates a specific fortune reading for the current year."""
+    prompt = f"""
+    You are a master of Bazi (Four Pillars of Destiny). 
+    A {gender} named {name} has the following natal chart:
+    Year: {pillars['year']}, Month: {pillars['month']}, Day: {pillars['day']}, Hour: {pillars['hour']}. 
+    
+    The current year is {current_year} (Year of the Fire Horse / Bing Wu). 
+    Analyze how the energy of {current_year} interacts with their specific chart.
+    
+    Provide a 2-paragraph forecast:
+    Paragraph 1: Career, Wealth, and Opportunities this year.
+    Paragraph 2: Relationships, Health, and Personal Growth this year.
+    
+    Keep the tone professional, insightful, and encouraging.
+    """
+    
+    response = model.generate_content(prompt)
+    return response.text

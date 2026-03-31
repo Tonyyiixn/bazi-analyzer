@@ -5,8 +5,9 @@ from datetime import datetime
 from database.models import SessionLocal
 from database.crud import create_reading, get_recent_readings
 from core.time_engine import get_true_solar_time
-from core.bazi_math import calculate_bazi_chart
-from core.ai_engine import generate_reading
+from core.bazi_math import calculate_bazi_chart, get_element_counts
+from core.ai_engine import generate_reading, generate_yearly_prediction
+
 
 # --- UI HELPER FUNCTIONS ---
 WUXING_COLORS = {
@@ -63,7 +64,7 @@ if st.button("Calculate & Save Bazi Chart", type="primary"):
             
             # Step C: AI Reading Engine
             ai_text = generate_reading(name, gender_input, city, year, pillars)
-            
+            ai_prediction = generate_yearly_prediction(name, gender_input, pillars, current_year=datetime.now().year)
             # --- THE NEW MULTI-TAB UI ---
             tab1, tab2, tab3 = st.tabs(["☯️ Natal Chart", "📊 Five Elements", "🔮 Yearly Predictions"])
             
@@ -93,12 +94,38 @@ if st.button("Calculate & Save Bazi Chart", type="primary"):
             # --- TAB 2: The Elements Chart (Coming Next) ---
             with tab2:
                 st.subheader("The Five Elements Balance (Wu Xing)")
-                st.info("We will build the math to count the elements and display a bar chart here next!")
+                st.markdown("A balanced chart contains all five elements. Let's look at your elemental distribution across your 8 characters:")
+                
+                # Fetch the math from our engine
+                element_counts = get_element_counts(pillars)
+                
+                # Display as a beautiful set of 5 metric columns
+                ec1, ec2, ec3, ec4, ec5 = st.columns(5)
+                
+                with ec1:
+                    st.markdown(f"<h3 style='color:#4CAF50; text-align:center;'>Wood</h3>", unsafe_allow_html=True)
+                    st.markdown(f"<h1 style='text-align:center;'>{element_counts['Wood']}</h1>", unsafe_allow_html=True)
+                with ec2:
+                    st.markdown(f"<h3 style='color:#F44336; text-align:center;'>Fire</h3>", unsafe_allow_html=True)
+                    st.markdown(f"<h1 style='text-align:center;'>{element_counts['Fire']}</h1>", unsafe_allow_html=True)
+                with ec3:
+                    st.markdown(f"<h3 style='color:#8D6E63; text-align:center;'>Earth</h3>", unsafe_allow_html=True)
+                    st.markdown(f"<h1 style='text-align:center;'>{element_counts['Earth']}</h1>", unsafe_allow_html=True)
+                with ec4:
+                    st.markdown(f"<h3 style='color:#FFC107; text-align:center;'>Metal</h3>", unsafe_allow_html=True)
+                    st.markdown(f"<h1 style='text-align:center;'>{element_counts['Metal']}</h1>", unsafe_allow_html=True)
+                with ec5:
+                    st.markdown(f"<h3 style='color:#2196F3; text-align:center;'>Water</h3>", unsafe_allow_html=True)
+                    st.markdown(f"<h1 style='text-align:center;'>{element_counts['Water']}</h1>", unsafe_allow_html=True)
+                    
+                st.divider()
+                st.info("💡 **Pro Tip:** Elements with a score of '0' are considered 'Missing Elements'. In Bazi philosophy, humans subconsciously seek out their missing elements in their career choices or romantic partners to find balance!")
                 
             # --- TAB 3: Yearly Predictions (Coming Next) ---
             with tab3:
                 st.subheader("2026 Yearly Forecast")
-                st.info("We will add a new AI prompt engine to look at the current year's energy and predict the user's fortune here!")
+                st.markdown(f"How does the Fire Horse energy of 2026 interact with {name}'s natal chart?")
+                st.write(ai_prediction)
 
             # Step E: Save to Database Engine
             db = next(get_db())
