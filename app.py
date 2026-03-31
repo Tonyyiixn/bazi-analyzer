@@ -64,35 +64,47 @@ if st.button("Calculate & Save Bazi Chart", type="primary"):
             # Step C: AI Reading Engine
             ai_text = generate_reading(name, gender_input, city, year, pillars)
             
-            # Step D: Display the Data (UI)
-            st.divider()
-            st.subheader(f"{name}'s Natal Chart")
-            pc1, pc2, pc3, pc4 = st.columns(4)
-            with pc1: st.markdown("**Year**<br>" + color_char(pillars['year'][0]) + "<br>" + color_char(pillars['year'][1]), unsafe_allow_html=True)
-            with pc2: st.markdown("**Month**<br>" + color_char(pillars['month'][0]) + "<br>" + color_char(pillars['month'][1]), unsafe_allow_html=True)
-            with pc3: st.markdown("**Day Master**<br>" + color_char(pillars['day'][0]) + "<br>" + color_char(pillars['day'][1]), unsafe_allow_html=True)
-            with pc4: st.markdown("**Hour**<br>" + color_char(pillars['hour'][0]) + "<br>" + color_char(pillars['hour'][1]), unsafe_allow_html=True)
+            # --- THE NEW MULTI-TAB UI ---
+            tab1, tab2, tab3 = st.tabs(["☯️ Natal Chart", "📊 Five Elements", "🔮 Yearly Predictions"])
             
-            st.divider()
-            st.subheader("Major Life Cycles (Da Yun)")
-            dy_cols = st.columns(8)
-            for i in range(1, 9):
-                if i < len(da_yuns):
-                    dy = da_yuns[i]
-                    with dy_cols[i-1]:
-                        st.markdown(f"**Age {dy.getStartAge()}**")
-                        st.markdown(color_char(dy.getGanZhi()[0]) + "<br>" + color_char(dy.getGanZhi()[1]), unsafe_allow_html=True)
+            # --- TAB 1: The Original Bazi Reading ---
+            with tab1:
+                st.subheader(f"{name}'s Natal Chart")
+                pc1, pc2, pc3, pc4 = st.columns(4)
+                with pc1: st.markdown("**Year**<br>" + color_char(pillars['year'][0]) + "<br>" + color_char(pillars['year'][1]), unsafe_allow_html=True)
+                with pc2: st.markdown("**Month**<br>" + color_char(pillars['month'][0]) + "<br>" + color_char(pillars['month'][1]), unsafe_allow_html=True)
+                with pc3: st.markdown("**Day Master**<br>" + color_char(pillars['day'][0]) + "<br>" + color_char(pillars['day'][1]), unsafe_allow_html=True)
+                with pc4: st.markdown("**Hour**<br>" + color_char(pillars['hour'][0]) + "<br>" + color_char(pillars['hour'][1]), unsafe_allow_html=True)
+                
+                st.divider()
+                st.subheader("Major Life Cycles (Da Yun)")
+                dy_cols = st.columns(8)
+                for i in range(1, 9):
+                    if i < len(da_yuns):
+                        dy = da_yuns[i]
+                        with dy_cols[i-1]:
+                            st.markdown(f"**Age {dy.getStartAge()}**")
+                            st.markdown(color_char(dy.getGanZhi()[0]) + "<br>" + color_char(dy.getGanZhi()[1]), unsafe_allow_html=True)
+                
+                st.divider()
+                st.subheader("AI Astrological Analysis")
+                st.write(ai_text)
             
-            st.divider()
-            st.subheader("AI Astrological Analysis")
-            st.write(ai_text)
-            
+            # --- TAB 2: The Elements Chart (Coming Next) ---
+            with tab2:
+                st.subheader("The Five Elements Balance (Wu Xing)")
+                st.info("We will build the math to count the elements and display a bar chart here next!")
+                
+            # --- TAB 3: Yearly Predictions (Coming Next) ---
+            with tab3:
+                st.subheader("2026 Yearly Forecast")
+                st.info("We will add a new AI prompt engine to look at the current year's energy and predict the user's fortune here!")
+
             # Step E: Save to Database Engine
             db = next(get_db())
             pillars_str = f"{pillars['year']} {pillars['month']} {pillars['day']} {pillars['hour']}"
             birth_date_str = f"{year}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}"
             create_reading(db, name, gender_input, city, birth_date_str, pillars_str, ai_text)
-            st.success("✅ Reading safely stored in the database.")
 
         except Exception as e:
             st.error(f"System Error: {e}")
