@@ -6,3 +6,5 @@ geopy
 timezonefinder
 pytz
 SQLAlchemy
+fastapi
+uvicorn

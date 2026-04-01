@@ -6,7 +6,7 @@ def calculate_bazi_chart(year, month, day, hour, minute, gender_input):
     lunar_date = solar_date.getLunar()
     bazi = lunar_date.getEightChar()
     
-    gender_code = 1 if gender_input == "Male" else 0
+    gender_code = 1 if gender_input in ["Male", "M"] else 0
     
     # Extract the pillars
     pillars = {
@@ -18,9 +18,22 @@ def calculate_bazi_chart(year, month, day, hour, minute, gender_input):
     
     # Extract the Da Yun (Luck Pillars)
     yun = bazi.getYun(gender_code)
-    da_yuns = yun.getDaYun()
+    raw_da_yuns = yun.getDaYun()
     
-    return pillars, da_yuns
+    clean_da_yuns = []
+    # We loop through the objects and only pull the exact strings/ints we need.
+    # We also limit it to the first 10 cycles (approx 100 years of life).
+    for i, dy in enumerate(raw_da_yuns):
+        if i >= 10: 
+            break
+            
+        clean_da_yuns.append({
+            "start_age": dy.getStartAge(),
+            "start_year": dy.getStartYear(),
+            "pillar": dy.getGanZhi()
+        })
+    
+    return pillars, clean_da_yuns
 
 def get_element_counts(pillars):
     """Counts the frequency of the Five Elements in the Natal Chart."""
@@ -46,3 +59,79 @@ def get_element_counts(pillars):
                 counts[element] += 1
                 
     return counts
+
+
+# Heavenly Stems with their Element and Polarity (Yin/Yang)
+STEM_ATTRIBUTES = {
+    '甲': {'element': 'Wood', 'polarity': 'Yang'},
+    '乙': {'element': 'Wood', 'polarity': 'Yin'},
+    '丙': {'element': 'Fire', 'polarity': 'Yang'},
+    '丁': {'element': 'Fire', 'polarity': 'Yin'},
+    '戊': {'element': 'Earth', 'polarity': 'Yang'},
+    '己': {'element': 'Earth', 'polarity': 'Yin'},
+    '庚': {'element': 'Metal', 'polarity': 'Yang'},
+    '辛': {'element': 'Metal', 'polarity': 'Yin'},
+    '壬': {'element': 'Water', 'polarity': 'Yang'},
+    '癸': {'element': 'Water', 'polarity': 'Yin'},
+    '寅': {'element': 'Wood', 'polarity': 'Yang'},
+    '卯': {'element': 'Wood', 'polarity': 'Yin'},
+    '辰': {'element': 'Earth', 'polarity': 'Yang'},
+    '巳': {'element': 'Fire', 'polarity': 'Yin'},
+    '午': {'element': 'Fire', 'polarity': 'Yang'},
+    '未': {'element': 'Earth', 'polarity': 'Yin'},
+    '申': {'element': 'Metal', 'polarity': 'Yang'},
+    '酉': {'element': 'Metal', 'polarity': 'Yin'},
+    '戌': {'element': 'Earth', 'polarity': 'Yang'},
+    '亥': {'element': 'Water', 'polarity': 'Yin'},
+    '子': {'element': 'Water', 'polarity': 'Yang'},
+}
+
+def get_ten_god(day_master_stem, target_stem):
+    """Calculates the Shishen (Ten God) relationship between the Day Master and another Stem."""
+    if target_stem not in STEM_ATTRIBUTES or day_master_stem not in STEM_ATTRIBUTES:
+        return "Unknown"
+
+    dm = STEM_ATTRIBUTES[day_master_stem]
+    target = STEM_ATTRIBUTES[target_stem]
+    
+    same_polarity = dm['polarity'] == target['polarity']
+    
+    # 1. Same Element (Companions)
+    if dm['element'] == target['element']:
+        return "Friend" if same_polarity else "Rob Wealth"
+        
+    # 2. Output (Day Master produces Target)
+    output_cycle = {'Wood': 'Fire', 'Fire': 'Earth', 'Earth': 'Metal', 'Metal': 'Water', 'Water': 'Wood'}
+    if output_cycle[dm['element']] == target['element']:
+        return "Eating God" if same_polarity else "Hurting Officer"
+        
+    # 3. Wealth (Day Master controls Target)
+    wealth_cycle = {'Wood': 'Earth', 'Earth': 'Water', 'Water': 'Fire', 'Fire': 'Metal', 'Metal': 'Wood'}
+    if wealth_cycle[dm['element']] == target['element']:
+        return "Indirect Wealth" if same_polarity else "Direct Wealth"
+        
+    # 4. Influence/Power (Target controls Day Master)
+    if wealth_cycle[target['element']] == dm['element']:
+        return "Seven Killings" if same_polarity else "Direct Officer"
+        
+    # 5. Resource (Target produces Day Master)
+    if output_cycle[target['element']] == dm['element']:
+        return "Indirect Resource" if same_polarity else "Direct Resource"
+
+    return "Unknown"
+
+def calculate_chart_ten_gods(pillars):
+    """Calculates the Ten Gods for the Heavenly Stems of the Year, Month, and Hour pillars."""
+    # The Day Master is the first character (Stem) of the Day Pillar
+    # Assuming pillars look like "Jia Zi", we split by space and take the first word.
+    try:
+        day_master = pillars['day'].split(' ')[0] 
+        
+        return {
+            'year': get_ten_god(day_master, pillars['year'].split(' ')[0]),
+            'month': get_ten_god(day_master, pillars['month'].split(' ')[0]),
+            'day': 'Day Master', # The Day Master is self
+            'hour': get_ten_god(day_master, pillars['hour'].split(' ')[0])
+        }
+    except:
+        return {'year': 'N/A', 'month': 'N/A', 'day': 'Day Master', 'hour': 'N/A'}

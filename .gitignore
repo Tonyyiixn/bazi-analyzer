@@ -8,3 +8,21 @@
 # Ignore Python cache files
 __pycache__/
 *.pyc
+
+# React /Node
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+.DS_Store
+
+# Ignore IDE files
+.vscode/
+.idea/
+
+# Ignore Python virtual environments
+venv/
+env/
+.venv/
+Include/
+Lib/
+Scripts/
