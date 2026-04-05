@@ -3,20 +3,24 @@ import { useState } from 'react'
 function App() {
   // 1. Form State
   const [formData, setFormData] = useState({
-    name: 'Alex',
+    name: 'Alice',
     gender: 'M',
-    city: 'Chengdu',
-    year: 1995,
-    month: 8,
-    day: 15,
-    hour: 14,
-    minute: 30
+    city: 'Beijing',
+    year: 1990,
+    month: 1,
+    day: 1,
+    hour: 1,
+    minute: 1
   });
 
   // 2. Network State
   const [isCalculating, setIsCalculating] = useState(false);
   const [chartData, setChartData] = useState(null);
   const [error, setError] = useState(null);
+
+  // AI Analysis State
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiReading, setAiReading] = useState(null);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -55,6 +59,35 @@ function App() {
       setError(err.message);
     } finally {
       setIsCalculating(false);
+    }
+  };
+
+  // 4. The AI Analysis Call
+  const handleAnalyze = async () => {
+    setIsAnalyzing(true);
+    setAiReading(null); // Clear old reading if asking again
+    setError(null);
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/v1/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to connect to the AI engine.");
+      }
+
+      const data = await response.json();
+      setAiReading(data.ai_reading);
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -123,6 +156,7 @@ function App() {
       </div>
 
       {/* THE RESULTS DASHBOARD (Only shows if chartData exists) */}
+      {/* THE RESULTS DASHBOARD */}
       {chartData && (
         <div className="space-y-8 w-full max-w-4xl animate-fade-in-up">
           
@@ -130,23 +164,26 @@ function App() {
           <div className="bg-white p-8 rounded-2xl shadow-xl border-t-4 border-indigo-500">
             <h2 className="text-2xl font-bold text-slate-700 mb-6 text-center">Natal Chart (Four Pillars)</h2>
             
+            {/* 1. The 4 Pillars & Ten Gods */}
             <div className="grid grid-cols-4 gap-4 mb-8">
-              {['Year', 'Month', 'Day', 'Hour'].map((pillar) => (
-                <div key={pillar} className="text-center">
-                  <p className="text-xs text-slate-400 uppercase font-bold mb-2">{pillar}</p>
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm">
-                    {/* The Pillar (e.g., 甲子) */}
-                    <p className="text-3xl font-medium text-slate-800">{chartData.pillars[pillar.toLowerCase()]}</p>
-                    {/* Placeholder for Shishen (e.g., Eating God) */}
-                    <p className="text-sm font-bold text-indigo-500 mt-2">Eating God</p>
+              {['Year', 'Month', 'Day', 'Hour'].map((pillar) => {
+                const pKey = pillar.toLowerCase();
+                return (
+                  <div key={pillar} className="text-center">
+                    <p className="text-xs text-slate-400 uppercase font-bold mb-2">{pillar}</p>
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition">
+                      <p className="text-3xl font-medium text-slate-800">{chartData.pillars[pKey]}</p>
+                      {/* Dynamic Ten Gods Injection */}
+                      <p className="text-sm font-bold text-indigo-500 mt-2">{chartData.ten_gods[pKey]}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
-            {/* ELEMENTAL PROGRESS BARS */}
+            {/* 2. Elemental Progress Bars */}
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 text-center">Element Strength</h3>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-5 gap-2 mb-8">
               {Object.entries(chartData.elements).map(([el, val]) => (
                 <div key={el} className="text-center">
                   <div className="h-24 bg-slate-100 rounded-full relative overflow-hidden flex flex-col justify-end">
@@ -155,19 +192,53 @@ function App() {
                       style={{ height: `${(val / 8) * 100}%` }}
                     ></div>
                   </div>
-                  <p className="text-xs font-bold mt-2 text-slate-600">{el}</p>
+                  <p className="text-xs font-bold mt-2 text-slate-600">{el} ({val})</p>
                 </div>
               ))}
             </div>
+
+            {/* 3. The Da Yun (10-Year Luck Pillars) */}
+            <div className="pt-6 border-t border-slate-100">
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 text-center">10-Year Luck Pillars (Da Yun)</h3>
+              <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
+                {chartData.da_yuns.map((yun, index) => (
+                  <div key={index} className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-center shadow-sm hover:bg-indigo-50 transition cursor-default">
+                    <p className="text-xs font-bold text-slate-500 mb-1">{yun.start_age}y</p>
+                    <p className="text-[10px] text-slate-400 mb-1">{yun.start_year}</p>
+                    <p className="text-base font-medium text-slate-800">{yun.pillar}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
-          {/* THE AI TRIGGER BUTTON (The "Small Button" you requested) */}
+          {/* THE AI TRIGGER BUTTON */}
           <div className="flex flex-col items-center py-6">
             <p className="text-slate-500 text-sm mb-4 italic">Want a deeper look into your destiny?</p>
-            <button className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-10 py-4 rounded-full font-bold shadow-lg hover:scale-105 transition-transform flex items-center gap-2">
-              ✨ Ask Gemini AI for Detailed Analysis
+            <button 
+              onClick={handleAnalyze}
+              disabled={isAnalyzing}
+              className={`px-10 py-4 rounded-full font-bold shadow-lg transition-transform flex items-center gap-2 ${
+                isAnalyzing 
+                  ? 'bg-slate-300 cursor-not-allowed text-slate-500 animate-pulse' 
+                  : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:scale-105'
+              }`}
+            >
+              {isAnalyzing ? '✨ Consulting the Stars...' : '✨ Ask Gemini AI for Detailed Analysis'}
             </button>
           </div>
+
+          {/* AI READING DISPLAY */}
+          {aiReading && (
+            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-8 rounded-2xl shadow-inner mt-8 animate-fade-in-up border border-indigo-100">
+              <h2 className="text-2xl font-bold text-indigo-900 mb-6 flex items-center gap-2">
+                <span>🔮</span> AI Astrologer Reading
+              </h2>
+              <div className="prose prose-indigo max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap font-serif">
+                {aiReading}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

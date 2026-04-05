@@ -125,13 +125,13 @@ def calculate_chart_ten_gods(pillars):
     # The Day Master is the first character (Stem) of the Day Pillar
     # Assuming pillars look like "Jia Zi", we split by space and take the first word.
     try:
-        day_master = pillars['day'].split(' ')[0] 
+        day_master = pillars['day'][0] 
         
         return {
-            'year': get_ten_god(day_master, pillars['year'].split(' ')[0]),
-            'month': get_ten_god(day_master, pillars['month'].split(' ')[0]),
+            'year': get_ten_god(day_master, pillars['year'][0]),
+            'month': get_ten_god(day_master, pillars['month'][0]),
             'day': 'Day Master', # The Day Master is self
-            'hour': get_ten_god(day_master, pillars['hour'].split(' ')[0])
+            'hour': get_ten_god(day_master, pillars['hour'][0])
         }
     except:
         return {'year': 'N/A', 'month': 'N/A', 'day': 'Day Master', 'hour': 'N/A'}
