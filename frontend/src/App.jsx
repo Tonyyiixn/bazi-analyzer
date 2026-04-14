@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Routes, Route, Link, useNavigate } from 'react-router-dom'
+import Auth from './Auth'
 
 function App() {
   // 1. Form State
@@ -12,6 +14,14 @@ function App() {
     hour: 1,
     minute: 1
   });
+
+  const navigate = useNavigate();
+  const isAuthenticated = !!localStorage.getItem('bazi_token');
+
+  const handleLogout = () => {
+    localStorage.removeItem('bazi_token');
+    navigate('/login');
+  }
 
   // 2. Network State
   const [isCalculating, setIsCalculating] = useState(false);
@@ -93,7 +103,37 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center py-10 px-4">
-      <h1 className="text-4xl font-extrabold text-slate-800 mb-8 tracking-tight">☯️ Bazi Calculator Pro</h1>
+
+      {/* 1. THE TOP NAVIGATION BAR */}
+      <div className="w-full max-w-4xl flex justify-between items-center mb-8 bg-white p-4 rounded-xl shadow-sm border-b-2 border-indigo-100">
+        <Link to="/" className="text-xl font-bold text-indigo-900 flex items-center gap-2">
+          <span>🌌</span> Bazi AI
+        </Link>
+        <div>
+          {isAuthenticated ? (
+            <button onClick={handleLogout} className="text-slate-500 hover:text-indigo-600 font-bold transition">
+              Log Out
+            </button>
+          ) : (
+            <Link to="/login" className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-5 py-2 rounded-full font-bold hover:scale-105 transition-transform shadow-md">
+              Log In
+            </Link>
+          )}
+        </div>
+      </div>
+
+      {/* 2. THE TRAFFIC COP (ROUTER) */}
+      <Routes>
+        
+        {/* Route A: The Login Page */}
+        <Route path="/login" element={<Auth />} />
+
+        {/* Route B: The Main Calculator (Your existing code goes here!) */}
+        <Route path="/" element={
+          <div className="w-full flex flex-col items-center">
+            
+            {/* >>> PASTE ALL YOUR EXISTING CALCULATOR UI HERE <<< */}
+            <h1 className="text-4xl font-extrabold text-slate-800 mb-8 tracking-tight">☯️ Bazi Calculator Pro</h1>
       
       {/* THE INPUT FORM */}
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-3xl mb-8">
@@ -241,6 +281,14 @@ function App() {
           )}
         </div>
       )}
+            {/* (The title, the input form, the chartData cards, the Gemini AI button, etc.) */}
+            
+          </div>
+        } />
+
+      </Routes>
+
+      
     </div>
   )
 }

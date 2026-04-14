@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
@@ -9,10 +9,59 @@ from core.time_engine import get_true_solar_time
 from core.bazi_math import calculate_bazi_chart, get_element_counts ,calculate_chart_ten_gods
 from core.ai_engine import generate_reading
 
-from schemas import BaziRequest
+from schemas import BaziRequest, UserCreate, UserResponse, Token, UserLogin
+from core import models, security
+from core.database import engine, get_db
 
 # Initialize the API
 app = FastAPI(title="Bazi Analyzer API", version="2.0")
+
+# This line tells SQLAlchemy to create the database file and tables!
+models.Base.metadata.create_all(bind=engine)
+
+# ==========================================
+# AUTHENTICATION ROUTES
+# ==========================================
+
+@app.post("/api/v1/signup", response_model=UserResponse)
+def signup(user: UserCreate, db: Session = Depends(get_db)):
+    """Registers a new user and saves them to the database."""
+    # 1. Check if the email is already in use
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # 2. Hash the password
+    hashed_pw = security.get_password_hash(user.password)
+    
+    # 3. Save the new user to the vault
+    new_user = models.User(email=user.email, name=user.name, hashed_password=hashed_pw)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user) # Refreshes to get the auto-generated ID
+    
+    return new_user
+
+
+@app.post("/api/v1/login", response_model=Token)
+def login(user: UserLogin, db: Session = Depends(get_db)):
+    """Logs a user in and hands them a VIP Wristband (JWT)."""
+    # 1. Find the user by email
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    
+    # 2. If user doesn't exist OR password doesn't match the hash, kick them out
+    if not db_user or not security.verify_password(user.password, db_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+        )
+    
+    # 3. If they pass, print the VIP wristband!
+    access_token = security.create_access_token(data={"sub": db_user.email})
+    
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
 
 # CORS config allows your future React app to talk to this API
 app.add_middleware(
