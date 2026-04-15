@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState , useEffect, use } from 'react'
 import { Routes, Route, Link, useNavigate } from 'react-router-dom'
 import Auth from './Auth'
 
@@ -16,7 +16,16 @@ function App() {
   });
 
   const navigate = useNavigate();
-  const isAuthenticated = !!localStorage.getItem('bazi_token');
+  
+  const token = localStorage.getItem('bazi_token');
+
+  const isAuthenticated = !!token;
+
+  useEffect(() => {
+    if (!token && window.location.pathname !== '/login') {
+      navigate('/login');
+    }
+  }, [token, navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem('bazi_token');
@@ -31,6 +40,9 @@ function App() {
   // AI Analysis State
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiReading, setAiReading] = useState(null);
+
+  // Save chart state
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -53,6 +65,7 @@ function App() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}` // Include the VIP Wristband for authentication
         },
         body: JSON.stringify(formData),
       });
@@ -83,6 +96,7 @@ function App() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}` // Include the VIP Wristband for authentication
         },
         body: JSON.stringify(formData),
       });
@@ -98,6 +112,36 @@ function App() {
       setError(err.message);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+
+  const handleSaveChart = async () => {
+    setIsSaving(true);
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/v1/charts/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}` // Show the VIP wristband!
+        },
+        body: JSON.stringify({
+          name: formData.name, // The person's name from the input form
+          chart_data: chartData, // The calculated 4 pillars data
+          ai_reading: aiReading // The Gemini text (will be null if they haven't asked AI yet)
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save the chart.");
+      }
+
+      alert("✨ Chart saved successfully to your Vault!");
+
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -267,7 +311,21 @@ function App() {
               {isAnalyzing ? '✨ Consulting the Stars...' : '✨ Ask Gemini AI for Detailed Analysis'}
             </button>
           </div>
-
+          
+          {/* THE SAVE BUTTON */}
+          <div className="flex justify-center mt-6">
+            <button 
+              onClick={handleSaveChart}
+              disabled={isSaving}
+              className={`px-8 py-3 rounded-xl font-bold shadow-sm transition-transform flex items-center gap-2 ${
+                isSaving 
+                  ? 'bg-slate-200 cursor-not-allowed text-slate-400' 
+                  : 'bg-emerald-500 text-white hover:bg-emerald-600 hover:scale-105'
+              }`}
+            >
+              {isSaving ? '💾 Saving...' : '💾 Save Chart to Profile'}
+            </button>
+          </div>
           {/* AI READING DISPLAY */}
           {aiReading && (
             <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-8 rounded-2xl shadow-inner mt-8 animate-fade-in-up border border-indigo-100">

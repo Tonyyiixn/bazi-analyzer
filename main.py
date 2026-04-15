@@ -3,14 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 # --- IMPORT OUR EXISTING ENGINES ---
+from core import database
 from database.models import SessionLocal, Base, engine
 from database.crud import create_reading
 from core.time_engine import get_true_solar_time
 from core.bazi_math import calculate_bazi_chart, get_element_counts ,calculate_chart_ten_gods
 from core.ai_engine import generate_reading
 
-from schemas import BaziRequest, UserCreate, UserResponse, Token, UserLogin
-from core import models, security
+from core.schemas import BaziRequest, UserCreate, UserResponse, Token, UserLogin
+from core import models, security , schemas
 from core.database import engine, get_db
 
 # Initialize the API
@@ -90,8 +91,10 @@ def read_root():
     return {"status": "Bazi API is online and waiting for React."}
 
 @app.post("/api/v1/calculate")
-def calculate_bazi(request: BaziRequest):
+def calculate_bazi(request: BaziRequest,
+                   current_user: models.User = Depends(security.get_current_user)):
     """Lightning fast: Only runs the math engines to return the chart."""
+
     try:
         # Step A: Time Engine
         adj_year, adj_month, adj_day, adj_hour, adj_minute = get_true_solar_time(
@@ -143,3 +146,27 @@ def analyze_bazi(request: BaziRequest, db: Session = Depends(get_db)):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI Engine Error: {str(e)}")
+    
+
+@app.post("/api/v1/charts/save")
+def save_user_chart(
+    chart_in: schemas.ChartCreate, 
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(security.get_current_user) # The Bouncer!
+):
+    """Saves a Bazi chart and AI reading to the user's account."""
+    
+    # Create the new chart record
+    new_chart = models.SavedChart(
+        user_id=current_user.id,
+        name=chart_in.name,
+        chart_data=chart_in.chart_data,
+        ai_reading=chart_in.ai_reading
+    )
+    
+    # Add to database and save
+    db.add(new_chart)
+    db.commit()
+    db.refresh(new_chart)
+    
+    return {"message": "Chart saved successfully!", "chart_id": new_chart.id}
