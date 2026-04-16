@@ -170,3 +170,40 @@ def save_user_chart(
     db.refresh(new_chart)
     
     return {"message": "Chart saved successfully!", "chart_id": new_chart.id}
+
+@app.get("/api/v1/charts")
+def get_user_charts(
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(security.get_current_user) # The VIP Bouncer!
+):
+    """Fetches all saved charts for the currently logged-in user."""
+    
+    # Query the database for charts where the user_id matches our current user
+    charts = db.query(models.SavedChart).filter(models.SavedChart.user_id == current_user.id).all()
+    
+    return charts
+
+
+@app.delete("/api/v1/charts/{chart_id}")
+def delete_user_chart(
+    chart_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(security.get_current_user) # The VIP Bouncer!
+):
+    """Deletes a specific chart belonging to the logged-in user."""
+    
+    # 1. Find the exact chart, making sure it belongs to this user
+    chart = db.query(models.SavedChart).filter(
+        models.SavedChart.id == chart_id,
+        models.SavedChart.user_id == current_user.id
+    ).first()
+    
+    # 2. If it doesn't exist (or isn't theirs), throw a 404 error
+    if not chart:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chart not found")
+        
+    # 3. Delete it and save the changes
+    db.delete(chart)
+    db.commit()
+    
+    return {"message": "Chart deleted successfully"}

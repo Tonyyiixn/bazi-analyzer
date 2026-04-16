@@ -1,6 +1,7 @@
 import { useState , useEffect, use } from 'react'
 import { Routes, Route, Link, useNavigate } from 'react-router-dom'
 import Auth from './Auth'
+import Dashboard from './Dashboard';
 
 function App() {
   // 1. Form State
@@ -155,9 +156,14 @@ function App() {
         </Link>
         <div>
           {isAuthenticated ? (
-            <button onClick={handleLogout} className="text-slate-500 hover:text-indigo-600 font-bold transition">
-              Log Out
+            <div className="flex items-center gap-6">
+              <Link to="/dashboard" className="text-indigo-600 font-bold hover:text-indigo-800 transition">
+                My Vault
+              </Link>
+            <button onClick={handleLogout} className="text-slate-500 hover:text-red-500 font-bold transition">
+                Log Out
             </button>
+        </div>
           ) : (
             <Link to="/login" className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-5 py-2 rounded-full font-bold hover:scale-105 transition-transform shadow-md">
               Log In
@@ -171,7 +177,8 @@ function App() {
         
         {/* Route A: The Login Page */}
         <Route path="/login" element={<Auth />} />
-
+          {/* Route C: The Dashboard for Saved Charts */}
+        <Route path="/dashboard" element={<Dashboard />} />
         {/* Route B: The Main Calculator (Your existing code goes here!) */}
         <Route path="/" element={
           <div className="w-full flex flex-col items-center">
