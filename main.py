@@ -207,3 +207,21 @@ def delete_user_chart(
     db.commit()
     
     return {"message": "Chart deleted successfully"}
+
+@app.get("/api/v1/charts/{chart_id}")
+def get_single_chart(
+    chart_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(security.get_current_user) # The VIP Bouncer
+):
+    """Fetches a single saved chart by its ID."""
+    
+    chart = db.query(models.SavedChart).filter(
+        models.SavedChart.id == chart_id,
+        models.SavedChart.user_id == current_user.id
+    ).first()
+    
+    if not chart:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chart not found")
+        
+    return chart

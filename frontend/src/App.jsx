@@ -2,6 +2,8 @@ import { useState , useEffect, use } from 'react'
 import { Routes, Route, Link, useNavigate } from 'react-router-dom'
 import Auth from './Auth'
 import Dashboard from './Dashboard';
+import ChartDetail from './ChartDetail';
+import Results from './Results';
 
 function App() {
   // 1. Form State
@@ -77,8 +79,8 @@ function App() {
 
       // Parse the JSON response
       const data = await response.json();
-      setChartData(data); // Save the pillars and elements into React state!
-
+      //setChartData(data); // Save the pillars and elements into React state!
+      navigate ('/results', { state: { chartData: data, formData: formData } }); // Send them to the results page with the data
     } catch (err) {
       setError(err.message);
     } finally {
@@ -179,6 +181,9 @@ function App() {
         <Route path="/login" element={<Auth />} />
           {/* Route C: The Dashboard for Saved Charts */}
         <Route path="/dashboard" element={<Dashboard />} />
+          {/* Route D: The Detail View for a Single Chart */}
+        <Route path="/chart/:id" element={<ChartDetail />} />
+        <Route path="/results" element={<Results />} />
         {/* Route B: The Main Calculator (Your existing code goes here!) */}
         <Route path="/" element={
           <div className="w-full flex flex-col items-center">

@@ -118,12 +118,12 @@ export default function Dashboard() {
               </div>
 
               {/* NEW: VIEW FULL CHART BUTTON (Placeholder for now) */}
-              <button 
-                className="w-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-bold py-2 rounded-lg transition"
-                onClick={() => alert("Full Chart View coming soon!")}
+              <Link 
+                to={`/chart/${chart.id}`}
+                className="w-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-bold py-2 rounded-lg transition text-center block"
               >
                 View Full Chart
-              </button>
+              </Link>
 
             </div>
           ))}
