@@ -8,9 +8,9 @@ from database.models import SessionLocal, Base, engine
 from database.crud import create_reading
 from core.time_engine import get_true_solar_time
 from core.bazi_math import calculate_bazi_chart, get_element_counts ,calculate_chart_ten_gods
-from core.ai_engine import generate_reading
+from core.ai_engine import generate_reading ,rectify_birth_hour
 
-from core.schemas import BaziRequest, UserCreate, UserResponse, Token, UserLogin
+from core.schemas import BaziRequest, UserCreate, UserResponse, Token, UserLogin, TimeTestAnswers
 from core import models, security , schemas
 from core.database import engine, get_db
 
@@ -147,7 +147,24 @@ def analyze_bazi(request: BaziRequest, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI Engine Error: {str(e)}")
     
-
+@app.post("/api/v1/rectify-time")
+def rectify_time(request: TimeTestAnswers):
+    """
+    AI Time Rectification: Uses Gemini to deduce the Shishen and birth hour 
+    based on the user's personality traits.
+    """
+    try:
+        # Call the AI engine
+        result = rectify_birth_hour(request.answers)
+        
+        return {
+            "success": True,
+            "data": result
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI Rectification Error: {str(e)}")
+    
 @app.post("/api/v1/charts/save")
 def save_user_chart(
     chart_in: schemas.ChartCreate, 

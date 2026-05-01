@@ -47,6 +47,12 @@ function App() {
   // Save chart state
   const [isSaving, setIsSaving] = useState(false);
 
+  // AI Time Test State
+  const [showRectifier, setShowRectifier] = useState(false);
+  const [userTraits, setUserTraits] = useState("");
+  const [isRectifying, setIsRectifying] = useState(false);
+  const [rectifierResult, setRectifierResult] = useState(null);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     const parsedValue = ['year', 'month', 'day', 'hour', 'minute'].includes(name) 
@@ -118,6 +124,37 @@ function App() {
     }
   };
 
+  // 5. The AI Time Rectification Call
+  const handleRectifyTime = async (e) => {
+    e.preventDefault(); // Stop form submission
+    setIsRectifying(true);
+    setError(null);
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/v1/rectify-time", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers: userTraits }),
+      });
+
+      if (!response.ok) throw new Error("Failed to deduce birth time.");
+
+      const data = await response.json();
+      setRectifierResult(data.data);
+
+      // Pro-move: Automatically extract the first number from the time block (e.g., "11" from "11:00-13:00")
+      // and update the main form data!
+      const timeString = data.data.inferred_time_block;
+      const inferredHour = parseInt(timeString.split(':')[0]);
+      
+      setFormData(prev => ({ ...prev, hour: inferredHour }));
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsRectifying(false);
+    }
+  };
 
   const handleSaveChart = async () => {
     setIsSaving(true);
@@ -228,13 +265,18 @@ function App() {
               <input type="number" name="day" value={formData.day} onChange={handleChange} min="1" max="31" className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Hour</label>
+              <div className="flex justify-between items-end mb-1">
+                <label className="block text-sm font-medium text-slate-600">Hour</label>
+                <button 
+                  type="button" 
+                  onClick={() => setShowRectifier(!showRectifier)}
+                  className="text-xs text-indigo-500 hover:text-indigo-700 font-bold"
+                >
+                  Don't know? 🪄
+                </button>
+              </div>
               <input type="number" name="hour" value={formData.hour} onChange={handleChange} min="0" max="23" className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" required />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Minute</label>
-              <input type="number" name="minute" value={formData.minute} onChange={handleChange} min="0" max="59" className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" required />
-            </div>
+              </div>
           </div>
 
           {/* Dynamic Button State */}
@@ -249,6 +291,49 @@ function App() {
           {/* Error Message Display */}
           {error && <div className="text-red-500 text-sm text-center font-semibold mt-2">{error}</div>}
         </form>
+        {/* --- AI TIME RECTIFICATION PANEL --- */}
+        {showRectifier && (
+          <div className="mt-8 bg-indigo-50 border border-indigo-100 p-6 rounded-xl animate-fade-in-up">
+            <h3 className="text-lg font-bold text-indigo-900 mb-2 flex items-center gap-2">
+              <span>🕵️‍♂️</span> AI Time Rectification
+            </h3>
+            <p className="text-sm text-slate-600 mb-4">
+              Describe your personality, how you handle stress, and your career style. Gemini AI will analyze your Ten Gods (Shishen) to deduce your likely birth hour!
+            </p>
+            
+            <textarea 
+              value={userTraits}
+              onChange={(e) => setUserTraits(e.target.value)}
+              placeholder="e.g., I am very rebellious, creative, and I hate strict rules. Under stress, I take charge..."
+              className="w-full h-24 border border-indigo-200 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 outline-none mb-3"
+            />
+            
+            <button 
+              type="button"
+              onClick={handleRectifyTime}
+              disabled={isRectifying || userTraits.length < 10}
+              className={`w-full py-2 rounded-lg font-bold transition ${isRectifying ? 'bg-indigo-300 text-white cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+            >
+              {isRectifying ? 'Analyzing Personality...' : 'Deduce My Birth Hour'}
+            </button>
+
+            {/* Results Output */}
+            {rectifierResult && (
+              <div className="mt-4 bg-white p-4 rounded-lg shadow-sm border-l-4 border-emerald-500">
+                <p className="font-bold text-slate-800 text-sm mb-1">
+                  Dominant Energy: <span className="text-emerald-600">{rectifierResult.inferred_shishen}</span>
+                </p>
+                <p className="text-sm text-slate-600 mb-2">
+                  <span className="font-semibold">Reasoning:</span> {rectifierResult.ai_reasoning}
+                </p>
+                <p className="text-xs font-bold text-slate-400 uppercase">
+                  Time auto-filled to: {rectifierResult.inferred_time_block}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+        {/* --- END AI PANEL --- */}
       </div>
 
       {/* THE RESULTS DASHBOARD (Only shows if chartData exists) */}

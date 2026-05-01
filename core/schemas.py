@@ -36,3 +36,6 @@ class ChartCreate(BaseModel):
     name: str
     chart_data: dict
     ai_reading: Optional[str] = None
+
+class TimeTestAnswers(BaseModel):
+    answers: str

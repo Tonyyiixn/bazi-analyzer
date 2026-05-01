@@ -26,3 +26,9 @@ class SavedChart(Base):
     
     # Link the chart back to the user
     owner = relationship("User", back_populates="saved_charts")
+
+
+class TimeTestAnswers(Base):
+    __tablename__ = "time_test_answers"
+    id = Column(Integer, primary_key=True, index=True)
+    answers = Column(String)
