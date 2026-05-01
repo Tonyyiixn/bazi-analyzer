@@ -11,7 +11,7 @@ Instead of relying solely on static mathematical chart calculations, this applic
 * **Real-Time Insights:** Calculates complex astrological pillars and translates them into digestible, user-friendly readings.
 
 ## 🛠️ Tech Stack
-* **Frontend:** React.js, Vite, Tailwind CSS (or standard CSS), JavaScript/HTML
+* **Frontend:** React.js, Vite, Tailwind CSS, JavaScript/HTML
 * **Backend:** Python, FastAPI, Uvicorn, Pydantic
 * **AI / LLM:** Google Gemini API (Generative AI)
 * **DevOps & Cloud:** Docker, AWS ECR, AWS ECS (Fargate), Vercel
@@ -24,31 +24,40 @@ If you want to run this project locally, you will need two separate terminal win
 
 ### 1. Clone the Repository
 ```bash
-git clone [https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git](https://github.com/Tonyyiixn/bazi-analyzer)
-cd YOUR_REPO_NAME
+git clone https://github.com/Tonyyiixn/bazi-analyzer.git
+cd bazi-analyzer
+```
 
 ### 2. Backend Setup (FastAPI)
+Navigate to the backend directory and set up your Python environment:
 
-Naviage to the backend directory and set up your Python environment:
-
+```bash
 cd backend
 python3 -m venv venv
 source venv/bin/activate  # On Windows use `venv\Scripts\activate`
 pip install -r requirements.txt
+```
 
-Create a .env file in the backend directory and add your Google Gemini API key:
+**Environment Variables:**
+Create a `.env` file in the `backend` directory and add your Google Gemini API key:
 
+```env
 GEMINI_API_KEY=your_api_key_here
+```
 
 Start the backend server:
 
+```bash
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+*The API will be running at `http://localhost:8000/docs`*
 
-### Frontend Setup (React/Vite)
+### 3. Frontend Setup (React/Vite)
 Open a new terminal, navigate to the frontend directory, and start the development server:
 
+```bash
 cd frontend
 npm install
 npm run dev
-
-The UI will be running at http://localhost:5173
+```
+*The UI will be running at `http://localhost:5173`*
