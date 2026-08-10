@@ -1,21 +1,32 @@
+from contextlib import asynccontextmanager
+from datetime import datetime
+
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 # --- IMPORT OUR EXISTING ENGINES ---
-from core import database
-from database.models import SessionLocal, Base, engine
-from database.crud import create_reading
 from core.time_engine import get_true_solar_time
 from core.bazi_math import calculate_bazi_chart, get_element_counts ,calculate_chart_ten_gods
-from core.ai_engine import generate_reading ,rectify_birth_hour
+from core.ai_engine import rectify_birth_hour
+from core.agent.orchestrator import BaziAgent
+from core.skills.registry import SKILLS, DEFAULT_SKILL_ID
 
-from core.schemas import BaziRequest, UserCreate, UserResponse, Token, UserLogin, TimeTestAnswers
-from core import models, security , schemas
+from core.schemas import BaziRequest, UserCreate, UserResponse, Token, UserLogin, TimeTestAnswers, ChatRequest
+from core import models, security, schemas
 from core.database import engine, get_db
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.bazi_agent = BaziAgent()
+    await app.state.bazi_agent.start()
+    yield
+    await app.state.bazi_agent.stop()
+
+
 # Initialize the API
-app = FastAPI(title="Bazi Analyzer API", version="2.0")
+app = FastAPI(title="Bazi Analyzer API", version="2.0", lifespan=lifespan)
 
 # This line tells SQLAlchemy to create the database file and tables!
 models.Base.metadata.create_all(bind=engine)
@@ -76,14 +87,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Database dependency
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
 # --- API ENDPOINTS ---
 
 @app.get("/")
@@ -97,10 +100,18 @@ def calculate_bazi(request: BaziRequest,
 
     try:
         # Step A: Time Engine
-        adj_year, adj_month, adj_day, adj_hour, adj_minute = get_true_solar_time(
-            request.year, request.month, request.day, request.hour, request.minute, request.city
-        )
-        
+        # Skip the correction when the hour is an AI-rectified estimate (a ~2hr
+        # block, not a precise clock time) - true solar time math would just
+        # add false precision on top of an already-approximate value.
+        if request.skip_true_solar_time:
+            adj_year, adj_month, adj_day, adj_hour, adj_minute = (
+                request.year, request.month, request.day, request.hour, request.minute
+            )
+        else:
+            adj_year, adj_month, adj_day, adj_hour, adj_minute = get_true_solar_time(
+                request.year, request.month, request.day, request.hour, request.minute, request.city
+            )
+
         # Step B: Math Engine
         pillars, da_yuns = calculate_bazi_chart(
             adj_year, adj_month, adj_day, adj_hour, adj_minute, request.gender
@@ -121,32 +132,6 @@ def calculate_bazi(request: BaziRequest,
         raise HTTPException(status_code=500, detail=f"Calculation Error: {str(e)}")
 
 
-@app.post("/api/v1/analyze")
-def analyze_bazi(request: BaziRequest, db: Session = Depends(get_db)):
-    """Heavy lifting: Runs the AI generation and saves to the database."""
-    try:
-        # Re-run the fast math locally to get the pillars for the AI
-        adj_year, adj_month, adj_day, adj_hour, adj_minute = get_true_solar_time(
-            request.year, request.month, request.day, request.hour, request.minute, request.city
-        )
-        pillars, _ = calculate_bazi_chart(adj_year, adj_month, adj_day, adj_hour, adj_minute, request.gender)
-        
-        # Step C: AI Engine
-        ai_text = generate_reading(request.name, request.gender, request.city, request.year, pillars)
-        
-        # Step D: Save to DB
-        pillars_str = f"{pillars['year']} {pillars['month']} {pillars['day']} {pillars['hour']}"
-        birth_date_str = f"{request.year}-{request.month:02d}-{request.day:02d} {request.hour:02d}:{request.minute:02d}"
-        create_reading(db, request.name, request.gender, request.city, birth_date_str, pillars_str, ai_text)
-        
-        return {
-            "success": True,
-            "ai_reading": ai_text
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI Engine Error: {str(e)}")
-    
 @app.post("/api/v1/rectify-time")
 def rectify_time(request: TimeTestAnswers):
     """
@@ -164,11 +149,114 @@ def rectify_time(request: TimeTestAnswers):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI Rectification Error: {str(e)}")
-    
+
+
+@app.get("/api/v1/skills")
+def list_skills():
+    """Returns the skill registry so the frontend can render a picker."""
+    return [
+        {"id": s.id, "title": s.title, "description": s.description, "icon": s.icon}
+        for s in SKILLS.values()
+        if s.id != DEFAULT_SKILL_ID
+    ]
+
+
+@app.post("/api/v1/chat")
+async def chat(
+    request: ChatRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(security.get_current_user),
+):
+    """Agent chat: Claude picks/uses a skill and calls the Bazi engines over MCP as tools.
+
+    Session-authoritative: the client sends only the new message. Prior
+    history is loaded from the database, and both the new user message and
+    the assistant's reply are persisted before returning."""
+    try:
+        if request.session_id is not None:
+            session = db.query(models.ChatSession).filter(
+                models.ChatSession.id == request.session_id,
+                models.ChatSession.user_id == current_user.id,
+            ).first()
+            if not session:
+                raise HTTPException(status_code=404, detail="Chat session not found")
+        else:
+            session = models.ChatSession(user_id=current_user.id)
+            db.add(session)
+            db.flush()  # assigns session.id without a full commit
+
+        history = [{"role": m.role, "content": m.content} for m in session.messages]
+        history.append({"role": "user", "content": request.message})
+
+        result = await app.state.bazi_agent.run(history, request.skill_id)
+
+        db.add(models.ChatMessage(session_id=session.id, role="user", content=request.message))
+        db.add(models.ChatMessage(session_id=session.id, role="assistant", content=result["reply"]))
+
+        if session.title is None:
+            session.title = request.message[:60]
+        session.skill_id = result.get("skill_used")
+        session.updated_at = datetime.utcnow()
+
+        db.commit()
+
+        return {"success": True, "session_id": session.id, **result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Agent Error: {str(e)}")
+
+
+@app.get("/api/v1/chat/sessions", response_model=list[schemas.ChatSessionOut])
+def list_chat_sessions(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(security.get_current_user),
+):
+    """Lists the current user's chat sessions, most recently active first."""
+    return db.query(models.ChatSession).filter(
+        models.ChatSession.user_id == current_user.id
+    ).order_by(models.ChatSession.updated_at.desc()).all()
+
+
+@app.get("/api/v1/chat/sessions/{session_id}", response_model=schemas.ChatSessionDetailOut)
+def get_chat_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(security.get_current_user),
+):
+    """Fetches one chat session with its full message history."""
+    session = db.query(models.ChatSession).filter(
+        models.ChatSession.id == session_id,
+        models.ChatSession.user_id == current_user.id,
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    return session
+
+
+@app.delete("/api/v1/chat/sessions/{session_id}")
+def delete_chat_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(security.get_current_user),
+):
+    """Deletes a chat session and its messages."""
+    session = db.query(models.ChatSession).filter(
+        models.ChatSession.id == session_id,
+        models.ChatSession.user_id == current_user.id,
+    ).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    db.delete(session)
+    db.commit()
+    return {"message": "Chat session deleted"}
+
+
 @app.post("/api/v1/charts/save")
 def save_user_chart(
     chart_in: schemas.ChartCreate, 
-    db: Session = Depends(database.get_db),
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(security.get_current_user) # The Bouncer!
 ):
     """Saves a Bazi chart and AI reading to the user's account."""
@@ -190,7 +278,7 @@ def save_user_chart(
 
 @app.get("/api/v1/charts")
 def get_user_charts(
-    db: Session = Depends(database.get_db),
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(security.get_current_user) # The VIP Bouncer!
 ):
     """Fetches all saved charts for the currently logged-in user."""
@@ -204,7 +292,7 @@ def get_user_charts(
 @app.delete("/api/v1/charts/{chart_id}")
 def delete_user_chart(
     chart_id: int,
-    db: Session = Depends(database.get_db),
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(security.get_current_user) # The VIP Bouncer!
 ):
     """Deletes a specific chart belonging to the logged-in user."""
@@ -228,7 +316,7 @@ def delete_user_chart(
 @app.get("/api/v1/charts/{chart_id}")
 def get_single_chart(
     chart_id: int,
-    db: Session = Depends(database.get_db),
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(security.get_current_user) # The VIP Bouncer
 ):
     """Fetches a single saved chart by its ID."""

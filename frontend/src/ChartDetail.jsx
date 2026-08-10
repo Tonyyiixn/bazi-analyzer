@@ -1,6 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 
+// Helper function to colorize Chinese characters based on their Bazi Element
+const getElementColor = (char) => {
+  const wood = ['甲', '乙', '寅', '卯'];
+  const fire = ['丙', '丁', '巳', '午'];
+  const earth = ['戊', '己', '辰', '戌', '丑', '未'];
+  const metal = ['庚', '辛', '申', '酉'];
+  const water = ['壬', '癸', '亥', '子'];
+
+  if (wood.includes(char)) return 'text-green-500';
+  if (fire.includes(char)) return 'text-red-500';
+  if (earth.includes(char)) return 'text-amber-700';
+  if (metal.includes(char)) return 'text-yellow-500';
+  if (water.includes(char)) return 'text-blue-500';
+
+  return 'text-slate-800'; // Default fallback
+};
+
 export default function ChartDetail() {
   const { id } = useParams(); // Grabs the ID from the URL!
   const navigate = useNavigate();
@@ -60,8 +77,20 @@ export default function ChartDetail() {
               <div key={pillar} className="text-center">
                 <p className="text-xs text-slate-400 uppercase font-bold mb-2">{pillar}</p>
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm">
-                  <p className="text-3xl font-medium text-slate-800">{chartData.pillars[pKey]}</p>
-                  <p className="text-sm font-bold text-indigo-500 mt-2">{chartData.ten_gods[pKey]}</p>
+                  {/* Stem (upper) */}
+                  <div className="flex flex-col items-center">
+                    <span className={`text-3xl font-medium drop-shadow-sm ${getElementColor(chartData.pillars[pKey][0])}`}>
+                      {chartData.pillars[pKey][0]}
+                    </span>
+                    <span className="text-xs font-bold text-indigo-500 mt-1">{chartData.ten_gods[pKey].stem}</span>
+                  </div>
+                  {/* Branch (lower) */}
+                  <div className="flex flex-col items-center mt-2 pt-2 border-t border-slate-200">
+                    <span className={`text-3xl font-medium drop-shadow-sm ${getElementColor(chartData.pillars[pKey][1])}`}>
+                      {chartData.pillars[pKey][1]}
+                    </span>
+                    <span className="text-xs font-bold text-emerald-600 mt-1">{chartData.ten_gods[pKey].branch}</span>
+                  </div>
                 </div>
               </div>
             );
@@ -83,6 +112,16 @@ export default function ChartDetail() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* AGENT NAVIGATION */}
+      <div className="flex justify-center mt-8 mb-8">
+        <button
+          onClick={() => navigate('/chat', { state: { chartData, formData: { name } } })}
+          className="px-8 py-3 rounded-xl font-bold shadow-sm transition-transform flex items-center justify-center gap-2 bg-slate-800 text-white hover:bg-slate-900 hover:scale-105"
+        >
+          🤖 Discuss with the Agent
+        </button>
       </div>
 
       {/* AI READING DISPLAY */}

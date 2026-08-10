@@ -120,18 +120,29 @@ def get_ten_god(day_master_stem, target_stem):
 
     return "Unknown"
 
+# Each Earthly Branch's dominant/main-qi hidden stem (本氣), used to give the
+# branch its own Ten God relative to the Day Master, same as the stem gets.
+BRANCH_MAIN_QI = {
+    '子': '癸', '丑': '己', '寅': '甲', '卯': '乙', '辰': '戊',
+    '巳': '丙', '午': '丁', '未': '己', '申': '庚', '酉': '辛',
+    '戌': '戊', '亥': '壬',
+}
+
 def calculate_chart_ten_gods(pillars):
-    """Calculates the Ten Gods for the Heavenly Stems of the Year, Month, and Hour pillars."""
-    # The Day Master is the first character (Stem) of the Day Pillar
-    # Assuming pillars look like "Jia Zi", we split by space and take the first word.
+    """Calculates the Ten Gods for both the stem and the branch (via its
+    dominant hidden stem) of the Year, Month, Day, and Hour pillars,
+    relative to the Day Master. Each pillar's entry is {"stem": ..., "branch": ...}."""
     try:
-        day_master = pillars['day'][0] 
-        
-        return {
-            'year': get_ten_god(day_master, pillars['year'][0]),
-            'month': get_ten_god(day_master, pillars['month'][0]),
-            'day': 'Day Master', # The Day Master is self
-            'hour': get_ten_god(day_master, pillars['hour'][0])
-        }
-    except:
-        return {'year': 'N/A', 'month': 'N/A', 'day': 'Day Master', 'hour': 'N/A'}
+        day_master = pillars['day'][0]
+
+        result = {}
+        for key in ('year', 'month', 'day', 'hour'):
+            stem, branch = pillars[key][0], pillars[key][1]
+            result[key] = {
+                'stem': 'Day Master' if key == 'day' else get_ten_god(day_master, stem),
+                'branch': get_ten_god(day_master, BRANCH_MAIN_QI[branch]),
+            }
+        return result
+    except Exception:
+        na = {'stem': 'N/A', 'branch': 'N/A'}
+        return {'year': na, 'month': na, 'day': {'stem': 'Day Master', 'branch': 'N/A'}, 'hour': na}

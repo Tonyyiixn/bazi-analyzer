@@ -11,7 +11,7 @@ tf = TimezoneFinder()
 def get_true_solar_time(year, month, day, hour, minute, city_name):
     """Converts standard clock time to True Solar Time based on longitude."""
     try:
-        location = geolocator.geocode(city_name, timeout=10)
+        location = geolocator.geocode(city_name, timeout=4)
         if not location:
             return year, month, day, hour, minute
         

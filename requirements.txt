@@ -1,7 +1,5 @@
-streamlit
 python-dotenv
 lunar-python
-google-generativeai
 geopy
 timezonefinder
 pytz
@@ -9,3 +7,9 @@ SQLAlchemy
 fastapi
 uvicorn
 pydantic
+anthropic
+mcp
+scikit-learn
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==4.0.1

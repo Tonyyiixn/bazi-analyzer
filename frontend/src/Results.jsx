@@ -25,9 +25,7 @@ export default function Results() {
   // Open the backpack to get the data
   const { chartData, formData } = location.state || {};
 
-  // State for our AI and Saving features
-  const [aiReading, setAiReading] = useState(null);
-  const [isGenerating, setIsGenerating] = useState(false);
+  // State for the Saving feature
   const [isSaving, setIsSaving] = useState(false);
   
   const token = localStorage.getItem('bazi_token');
@@ -42,31 +40,6 @@ export default function Results() {
     );
   }
 
-  // --- THE AI FUNCTION ---
-  const handleAskAI = async () => {
-    setIsGenerating(true);
-    try {
-      // Note: Adjust this URL if your AI route is named something else!
-      const response = await fetch("http://127.0.0.1:8000/api/v1/analyze", { 
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) throw new Error("Failed to get AI reading.");
-      
-      const data = await response.json();
-      setAiReading(data.reading || data.ai_reading || data); // Adjust based on your FastAPI return dictionary
-    } catch (err) {
-      alert("Error: " + err.message);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
   // --- THE SAVE FUNCTION ---
   const handleSaveChart = async () => {
     setIsSaving(true);
@@ -80,7 +53,6 @@ export default function Results() {
         body: JSON.stringify({
           name: formData.name,
           chart_data: chartData,
-          ai_reading: aiReading
         }),
       });
 
@@ -118,15 +90,20 @@ export default function Results() {
               <div key={pillar} className="text-center">
                 <p className="text-xs text-slate-400 uppercase font-bold mb-2">{pillar}</p>
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm">
-                  {/* <p className="text-3xl font-medium text-slate-800">{chartData.pillars[pKey]}</p> */}
-                  <p className="flex flex-col items-center text-3xl font-medium drop-shadow-sm space-y-1">
-  {String(chartData.pillars[pKey]).split('').map((char, index) => (
-    <span key={index} className={getElementColor(char)}>
-      {char}
-    </span>
-  ))}
-</p>
-                  <p className="text-sm font-bold text-indigo-500 mt-2">{chartData.ten_gods[pKey]}</p>
+                  {/* Stem (upper) */}
+                  <div className="flex flex-col items-center">
+                    <span className={`text-3xl font-medium drop-shadow-sm ${getElementColor(chartData.pillars[pKey][0])}`}>
+                      {chartData.pillars[pKey][0]}
+                    </span>
+                    <span className="text-xs font-bold text-indigo-500 mt-1">{chartData.ten_gods[pKey].stem}</span>
+                  </div>
+                  {/* Branch (lower) */}
+                  <div className="flex flex-col items-center mt-2 pt-2 border-t border-slate-200">
+                    <span className={`text-3xl font-medium drop-shadow-sm ${getElementColor(chartData.pillars[pKey][1])}`}>
+                      {chartData.pillars[pKey][1]}
+                    </span>
+                    <span className="text-xs font-bold text-emerald-600 mt-1">{chartData.ten_gods[pKey].branch}</span>
+                  </div>
                 </div>
               </div>
             );
@@ -173,42 +150,25 @@ export default function Results() {
     </div>
       {/* ACTION BUTTONS */}
       <div className="flex flex-col sm:flex-row justify-center gap-4 mb-8">
-        <button 
-          onClick={handleAskAI}
-          disabled={isGenerating}
-          className={`px-8 py-3 rounded-xl font-bold shadow-sm transition-transform flex items-center justify-center gap-2 ${
-            isGenerating 
-              ? 'bg-slate-200 cursor-not-allowed text-slate-400' 
-              : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:scale-105'
-          }`}
-        >
-          {isGenerating ? '🔮 Consulting the Stars...' : '🔮 Ask AI Astrologer'}
-        </button>
-
-        <button 
+        <button
           onClick={handleSaveChart}
           disabled={isSaving}
           className={`px-8 py-3 rounded-xl font-bold shadow-sm transition-transform flex items-center justify-center gap-2 ${
-            isSaving 
-              ? 'bg-slate-200 cursor-not-allowed text-slate-400' 
+            isSaving
+              ? 'bg-slate-200 cursor-not-allowed text-slate-400'
               : 'bg-emerald-500 text-white hover:bg-emerald-600 hover:scale-105'
           }`}
         >
           {isSaving ? '💾 Saving...' : '💾 Save Chart to Vault'}
         </button>
-      </div>
 
-      {/* AI READING DISPLAY */}
-      {aiReading && (
-        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-8 rounded-2xl shadow-inner border border-indigo-100">
-          <h2 className="text-2xl font-bold text-indigo-900 mb-6 flex items-center gap-2">
-            <span>✨</span> Your Cosmic Reading
-          </h2>
-          <div className="prose prose-indigo max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap font-serif">
-            {aiReading}
-          </div>
-        </div>
-      )}
+        <button
+          onClick={() => navigate('/chat', { state: { chartData, formData } })}
+          className="px-8 py-3 rounded-xl font-bold shadow-sm transition-transform flex items-center justify-center gap-2 bg-slate-800 text-white hover:bg-slate-900 hover:scale-105"
+        >
+          🤖 Discuss with the Agent
+        </button>
+      </div>
     </div>
   );
 }

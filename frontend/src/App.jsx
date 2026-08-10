@@ -1,9 +1,27 @@
 import { useState , useEffect, use } from 'react'
-import { Routes, Route, Link, useNavigate } from 'react-router-dom'
+import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom'
 import Auth from './Auth'
 import Dashboard from './Dashboard';
 import ChartDetail from './ChartDetail';
 import Results from './Results';
+import Chat from './Chat';
+
+// Helper function to colorize Chinese characters based on their Bazi Element
+const getElementColor = (char) => {
+  const wood = ['甲', '乙', '寅', '卯'];
+  const fire = ['丙', '丁', '巳', '午'];
+  const earth = ['戊', '己', '辰', '戌', '丑', '未'];
+  const metal = ['庚', '辛', '申', '酉'];
+  const water = ['壬', '癸', '亥', '子'];
+
+  if (wood.includes(char)) return 'text-green-500';
+  if (fire.includes(char)) return 'text-red-500';
+  if (earth.includes(char)) return 'text-amber-700';
+  if (metal.includes(char)) return 'text-yellow-500';
+  if (water.includes(char)) return 'text-blue-500';
+
+  return 'text-slate-800'; // Default fallback
+};
 
 function App() {
   // 1. Form State
@@ -19,16 +37,17 @@ function App() {
   });
 
   const navigate = useNavigate();
-  
+  const location = useLocation();
+
   const token = localStorage.getItem('bazi_token');
 
   const isAuthenticated = !!token;
 
   useEffect(() => {
-    if (!token && window.location.pathname !== '/login') {
+    if (!token && location.pathname !== '/login') {
       navigate('/login');
     }
-  }, [token, navigate]);
+  }, [token, location.pathname, navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem('bazi_token');
@@ -40,10 +59,6 @@ function App() {
   const [chartData, setChartData] = useState(null);
   const [error, setError] = useState(null);
 
-  // AI Analysis State
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [aiReading, setAiReading] = useState(null);
-
   // Save chart state
   const [isSaving, setIsSaving] = useState(false);
 
@@ -52,11 +67,15 @@ function App() {
   const [userTraits, setUserTraits] = useState("");
   const [isRectifying, setIsRectifying] = useState(false);
   const [rectifierResult, setRectifierResult] = useState(null);
+  // Whether to apply the True Solar Time correction. User-controlled via a
+  // checkbox; the rectifier flips it off as a smart default since its hour
+  // is only a ~2hr block estimate, but the user has final say.
+  const [useTrueSolarTime, setUseTrueSolarTime] = useState(true);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    const parsedValue = ['year', 'month', 'day', 'hour', 'minute'].includes(name) 
-      ? parseInt(value) || '' 
+    const parsedValue = ['year', 'month', 'day', 'hour', 'minute'].includes(name)
+      ? parseInt(value) || ''
       : value;
     setFormData({ ...formData, [name]: parsedValue });
   };
@@ -76,7 +95,7 @@ function App() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}` // Include the VIP Wristband for authentication
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, skip_true_solar_time: !useTrueSolarTime }),
       });
 
       if (!response.ok) {
@@ -94,37 +113,7 @@ function App() {
     }
   };
 
-  // 4. The AI Analysis Call
-  const handleAnalyze = async () => {
-    setIsAnalyzing(true);
-    setAiReading(null); // Clear old reading if asking again
-    setError(null);
-
-    try {
-      const response = await fetch("http://127.0.0.1:8000/api/v1/analyze", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}` // Include the VIP Wristband for authentication
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to connect to the AI engine.");
-      }
-
-      const data = await response.json();
-      setAiReading(data.ai_reading);
-
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  // 5. The AI Time Rectification Call
+  // 4. The AI Time Rectification Call
   const handleRectifyTime = async (e) => {
     e.preventDefault(); // Stop form submission
     setIsRectifying(true);
@@ -148,6 +137,7 @@ function App() {
       const inferredHour = parseInt(timeString.split(':')[0]);
       
       setFormData(prev => ({ ...prev, hour: inferredHour }));
+      setUseTrueSolarTime(false); // it's a ~2hr block estimate, not a precise time - user can re-enable below
 
     } catch (err) {
       setError(err.message);
@@ -168,7 +158,6 @@ function App() {
         body: JSON.stringify({
           name: formData.name, // The person's name from the input form
           chart_data: chartData, // The calculated 4 pillars data
-          ai_reading: aiReading // The Gemini text (will be null if they haven't asked AI yet)
         }),
       });
 
@@ -196,6 +185,9 @@ function App() {
         <div>
           {isAuthenticated ? (
             <div className="flex items-center gap-6">
+              <Link to="/chat" className="text-indigo-600 font-bold hover:text-indigo-800 transition">
+                🤖 AI Agent
+              </Link>
               <Link to="/dashboard" className="text-indigo-600 font-bold hover:text-indigo-800 transition">
                 My Vault
               </Link>
@@ -221,6 +213,7 @@ function App() {
           {/* Route D: The Detail View for a Single Chart */}
         <Route path="/chart/:id" element={<ChartDetail />} />
         <Route path="/results" element={<Results />} />
+        <Route path="/chat" element={<Chat />} />
         {/* Route B: The Main Calculator (Your existing code goes here!) */}
         <Route path="/" element={
           <div className="w-full flex flex-col items-center">
@@ -251,7 +244,7 @@ function App() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">Year</label>
               <input type="number" name="year" value={formData.year} onChange={handleChange} min="1900" max="2100" className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" required />
@@ -266,21 +259,42 @@ function App() {
             </div>
             <div>
               <div className="flex justify-between items-end mb-1">
-                <label className="block text-sm font-medium text-slate-600">Hour</label>
-                <button 
-                  type="button" 
+                <label className="block text-sm font-medium text-slate-600">Time</label>
+                <button
+                  type="button"
                   onClick={() => setShowRectifier(!showRectifier)}
                   className="text-xs text-indigo-500 hover:text-indigo-700 font-bold"
                 >
                   Don't know? 🪄
                 </button>
               </div>
-              <input type="number" name="hour" value={formData.hour} onChange={handleChange} min="0" max="23" className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" required />
+              <div className="flex items-center gap-2">
+                <input type="number" name="hour" value={formData.hour} onChange={handleChange} min="0" max="23" placeholder="HH" className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" required />
+                <span className="text-slate-400 font-bold">:</span>
+                <input type="number" name="minute" value={formData.minute} onChange={handleChange} min="0" max="59" placeholder="MM" className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" required />
               </div>
+            </div>
           </div>
 
+          {/* True Solar Time toggle */}
+          <label className="flex items-center gap-2 text-sm text-slate-600 select-none cursor-pointer w-fit">
+            <input
+              type="checkbox"
+              checked={useTrueSolarTime}
+              onChange={(e) => setUseTrueSolarTime(e.target.checked)}
+              className="w-4 h-4 accent-indigo-600"
+            />
+            <span>Apply True Solar Time correction</span>
+            <span
+              title="Adjusts your birth time based on your city's longitude vs. its timezone's standard meridian, for a more precise Hour Pillar. Turn this off if your time above is only an estimate (e.g. from the AI Time Rectifier below) - the correction just adds false precision to a value that isn't precise to begin with."
+              className="text-slate-400 hover:text-indigo-500 font-bold cursor-help"
+            >
+              ⓘ
+            </span>
+          </label>
+
           {/* Dynamic Button State */}
-          <button 
+          <button
             type="submit" 
             disabled={isCalculating}
             className={`w-full font-bold py-3 rounded-lg transition shadow-md ${isCalculating ? 'bg-indigo-400 cursor-not-allowed text-indigo-100' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
@@ -298,13 +312,13 @@ function App() {
               <span>🕵️‍♂️</span> AI Time Rectification
             </h3>
             <p className="text-sm text-slate-600 mb-4">
-              Describe your personality, how you handle stress, and your career style. Gemini AI will analyze your Ten Gods (Shishen) to deduce your likely birth hour!
+              Describe your personality, how you handle stress, and your career style. Claude will analyze your Ten Gods (Shishen) to deduce your likely birth hour!
             </p>
             
             <textarea 
               value={userTraits}
               onChange={(e) => setUserTraits(e.target.value)}
-              placeholder="e.g., I am very rebellious, creative, and I hate strict rules. Under stress, I take charge..."
+              placeholder="e.g., I am very rebellious, creative, and I hate strict rules. Under stress, I take charge...Please write as much as possible for accuracy"
               className="w-full h-24 border border-indigo-200 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 outline-none mb-3"
             />
             
@@ -353,9 +367,20 @@ function App() {
                   <div key={pillar} className="text-center">
                     <p className="text-xs text-slate-400 uppercase font-bold mb-2">{pillar}</p>
                     <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition">
-                      <p className="text-3xl font-medium text-slate-800">{chartData.pillars[pKey]}</p>
-                      {/* Dynamic Ten Gods Injection */}
-                      <p className="text-sm font-bold text-indigo-500 mt-2">{chartData.ten_gods[pKey]}</p>
+                      {/* Stem (upper) */}
+                      <div className="flex flex-col items-center">
+                        <span className={`text-3xl font-medium drop-shadow-sm ${getElementColor(chartData.pillars[pKey][0])}`}>
+                          {chartData.pillars[pKey][0]}
+                        </span>
+                        <span className="text-xs font-bold text-indigo-500 mt-1">{chartData.ten_gods[pKey].stem}</span>
+                      </div>
+                      {/* Branch (lower) */}
+                      <div className="flex flex-col items-center mt-2 pt-2 border-t border-slate-200">
+                        <span className={`text-3xl font-medium drop-shadow-sm ${getElementColor(chartData.pillars[pKey][1])}`}>
+                          {chartData.pillars[pKey][1]}
+                        </span>
+                        <span className="text-xs font-bold text-emerald-600 mt-1">{chartData.ten_gods[pKey].branch}</span>
+                      </div>
                     </div>
                   </div>
                 );
@@ -393,22 +418,6 @@ function App() {
             </div>
           </div>
 
-          {/* THE AI TRIGGER BUTTON */}
-          <div className="flex flex-col items-center py-6">
-            <p className="text-slate-500 text-sm mb-4 italic">Want a deeper look into your destiny?</p>
-            <button 
-              onClick={handleAnalyze}
-              disabled={isAnalyzing}
-              className={`px-10 py-4 rounded-full font-bold shadow-lg transition-transform flex items-center gap-2 ${
-                isAnalyzing 
-                  ? 'bg-slate-300 cursor-not-allowed text-slate-500 animate-pulse' 
-                  : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:scale-105'
-              }`}
-            >
-              {isAnalyzing ? '✨ Consulting the Stars...' : '✨ Ask Gemini AI for Detailed Analysis'}
-            </button>
-          </div>
-          
           {/* THE SAVE BUTTON */}
           <div className="flex justify-center mt-6">
             <button 
@@ -423,17 +432,6 @@ function App() {
               {isSaving ? '💾 Saving...' : '💾 Save Chart to Profile'}
             </button>
           </div>
-          {/* AI READING DISPLAY */}
-          {aiReading && (
-            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-8 rounded-2xl shadow-inner mt-8 animate-fade-in-up border border-indigo-100">
-              <h2 className="text-2xl font-bold text-indigo-900 mb-6 flex items-center gap-2">
-                <span>🔮</span> AI Astrologer Reading
-              </h2>
-              <div className="prose prose-indigo max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap font-serif">
-                {aiReading}
-              </div>
-            </div>
-          )}
         </div>
       )}
             {/* (The title, the input form, the chartData cards, the Gemini AI button, etc.) */}

@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, Any
+from datetime import datetime
 
 class BaziRequest(BaseModel):
     name: str
@@ -10,6 +11,7 @@ class BaziRequest(BaseModel):
     day: int
     hour: int
     minute: int
+    skip_true_solar_time: bool = False
 
 class UserCreate(BaseModel):
     name: str
@@ -39,3 +41,32 @@ class ChartCreate(BaseModel):
 
 class TimeTestAnswers(BaseModel):
     answers: str
+
+class ChatRequest(BaseModel):
+    """Send one new message. Omit session_id to start a new session -
+    the server loads/persists history, the client no longer resends it."""
+    message: str
+    session_id: Optional[int] = None
+    skill_id: Optional[str] = None
+
+class ChatMessageOut(BaseModel):
+    id: int
+    role: str
+    content: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ChatSessionOut(BaseModel):
+    id: int
+    title: Optional[str] = None
+    skill_id: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ChatSessionDetailOut(ChatSessionOut):
+    messages: list[ChatMessageOut] = []
