@@ -39,10 +39,10 @@ pip install -r requirements.txt
 ```
 
 **Environment Variables:**
-Create a `.env` file in the `backend` directory and add your Google Gemini API key:
+Create a `.env` file in the `backend` directory and add your Anthropic Claude API key:
 
 ```env
-GEMINI_API_KEY=your_api_key_here
+ANTHROPIC_API_KEY=your_api_key_here
 ```
 
 Start the backend server:
