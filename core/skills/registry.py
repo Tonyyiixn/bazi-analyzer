@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from core.skills.base import Skill
 
 SKILLS: dict[str, Skill] = {
@@ -35,13 +33,15 @@ about friction points, not just flattering.""",
         title="Yearly Forecast",
         description="Forecast how the current year's energy interacts with a natal chart.",
         icon="calendar",
-        system_prompt=f"""Focus this reading on the current year ({datetime.now().year}).
-After computing the natal chart, analyze how this year's stem/branch energy
-interacts with the Day Master and existing elements (generating, weakening,
-or clashing). Cover career/wealth/opportunity in one part and
+        system_prompt="""Focus this reading on the current year (see today's
+date in your instructions - never guess or assume what year it is). After
+computing the natal chart, call get_liu_nian for that year to get its exact
+pillar, Ten God relationship to the Day Master, and how it interacts with
+the natal branches/Day Master - never invent the year's stem/branch or its
+effects yourself. Cover career/wealth/opportunity in one part and
 relationships/health/personal growth in another. Keep the tone professional,
 insightful, and encouraging, and be specific about WHY the year's energy
-produces the effect you describe.""",
+produces the effect you describe, citing the Liu Nian data directly.""",
     ),
     "health": Skill(
         id="health",

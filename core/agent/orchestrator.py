@@ -8,6 +8,7 @@ import json
 import os
 import sys
 from contextlib import AsyncExitStack
+from datetime import date
 from pathlib import Path
 
 import anthropic
@@ -35,6 +36,14 @@ Day Master and whether the season supports true transformation - read those \
 fields rather than eyeballing the chart yourself; an empty list means none \
 are active, not that you should look harder. If the user hasn't given you a \
 full birth date, time, and city yet, ask for what's missing before guessing.
+
+For "this year" / "next year" / any specific-year question, call get_liu_nian \
+with the natal pillars and the target year (use the date given in your \
+instructions below to know what year "this year" actually is - never guess \
+or rely on your training data for the current year). It returns that year's \
+exact pillar, Ten God relationship to the Day Master, how its branch \
+interacts with the natal branches, and whether its stem combines with the \
+Day Master - never invent a year's stem/branch or its effects yourself.
 
 You also have a search_bazi_principles tool over a small curated library of \
 traditional interpretive principles. Call it before making interpretive claims \
@@ -89,6 +98,11 @@ class BaziAgent:
         system = BASE_PERSONA + "\n\n" + skill.system_prompt
         if skill.id == DEFAULT_SKILL_ID:
             system += "\n\nAvailable specialized lenses - adopt whichever fits the question:\n" + _skill_menu()
+        # Computed fresh per request (not baked in at import time) so it never
+        # goes stale if the server process stays up across a date/year change.
+        # Placed last so it doesn't sit in front of the otherwise-stable
+        # system prompt if prompt caching is ever added later.
+        system += f"\n\nToday's date is {date.today().isoformat()}."
 
         convo = list(messages)
 
