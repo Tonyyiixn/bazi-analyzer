@@ -8,7 +8,7 @@ from mcp.server.fastmcp import FastMCP
 
 from core.time_engine import get_true_solar_time
 from core.bazi_math import calculate_bazi_chart, get_element_counts, calculate_chart_ten_gods
-from core.bazi_interactions import find_branch_interactions, find_stem_combinations
+from core.bazi_interactions import find_branch_interactions, find_stem_combinations, analyze_liu_nian
 from core.rag import get_index
 
 mcp = FastMCP("bazi-engine")
@@ -109,6 +109,29 @@ def get_stem_combinations(pillars: dict) -> dict:
     treat it as a signal to weigh, not a final verdict). An empty list means
     no adjacent stem combinations are present - don't invent any."""
     return {"combinations": find_stem_combinations(pillars)}
+
+
+@mcp.tool()
+def get_liu_nian(pillars: dict, year: int) -> dict:
+    """Compute the Liu Nian (流年, annual pillar) for a given year and how it
+    interacts with a natal chart - use this for any "this year"/"next
+    year"/specific-year question. `pillars` must have "year"/"month"/"day"/
+    "hour" keys, each a 2-character stem+branch string, as returned by
+    calculate_full_chart. `year` is a plain calendar year (e.g. 2026) - check
+    your instructions for today's date rather than guessing what year it is.
+
+    Returns:
+    - "pillar": the year's GanZhi, e.g. "丙午"
+    - "ten_gods": {"stem", "branch"} relationship to the Day Master
+    - "branch_interactions": every clash/combination/three-harmony/
+      punishment/harm/break the year's branch forms against the natal
+      branches (same detection as get_branch_interactions)
+    - "stem_combination_with_day_master": non-null only if the year's stem
+      pairs with the Day Master specifically (the traditionally significant
+      case per stem_combinations.md) - null otherwise, not "no combination
+      exists at all" for other stems, since only the Day Master pairing is
+      checked here."""
+    return analyze_liu_nian(pillars, year)
 
 
 @mcp.tool()
