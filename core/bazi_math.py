@@ -1,5 +1,17 @@
 from lunar_python import Solar
 
+def get_year_pillar(year):
+    """Returns the Liu Nian (流年, annual pillar) GanZhi for a given year,
+    e.g. 2026 -> "丙午". This is "this year's energy" for yearly-forecast
+    questions, independent of any specific birth chart.
+
+    Anchored at June 15 of that year - safely past 立春 (~Feb 4, the actual
+    year-pillar boundary) and before the next year's, so it reuses the same
+    lunar_python machinery that already gets the birth-year pillar right,
+    without re-deriving the 立春/cycle math by hand."""
+    solar_date = Solar.fromYmdHms(year, 6, 15, 12, 0, 0)
+    return solar_date.getLunar().getEightChar().getYear()
+
 def calculate_bazi_chart(year, month, day, hour, minute, gender_input):
     """Calculates the Four Pillars and Da Yun based on precise solar time."""
     solar_date = Solar.fromYmdHms(year, month, day, hour, minute, 0)
