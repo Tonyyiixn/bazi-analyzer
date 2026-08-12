@@ -4,7 +4,7 @@ detection.
 These build synthetic pillar dicts (not full lunar_python charts) so each
 interaction type can be tested in isolation with a precise, minimal example.
 """
-from core.bazi_interactions import find_branch_interactions, find_stem_combinations
+from core.bazi_interactions import find_branch_interactions, find_stem_combinations, analyze_liu_nian
 
 
 def _pillars(year, month, day, hour):
@@ -181,3 +181,63 @@ def test_stem_combination_tables_match_the_rag_principle_doc():
         frozenset(('戊', '癸')): 'Fire',
     }
     assert STEM_COMBINATIONS == expected
+
+
+# ---------------------------------------------------------------------------
+# Liu Nian (流年, annual pillar) analysis
+#
+# 1984 is a verified Jia-Zi (甲子) year (see test_bazi_math.py). Natal chart
+# below is hand-picked so the expected result can be fully worked out by hand
+# from the same tables tested above, not just re-derived by the code itself:
+#
+#   Natal: Year=戊午, Month=辛未, Day=己巳, Hour=甲寅  (Day Master = 己)
+#   Liu Nian 1984 = 甲子 (stem 甲, branch 子)
+#
+#   - Ten God stem: 己(Yin Earth) vs 甲(Yang Wood) -> Wood controls Earth,
+#     diff polarity -> Direct Officer
+#   - Ten God branch: 子's main qi is 癸(Yin Water); 己(Yin) vs 癸(Yin) ->
+#     Earth controls Water, same polarity -> Indirect Wealth
+#   - Stem combination: 甲+己 is a valid pair -> Earth. Month branch 未 is
+#     Earth itself, so season_supports_transformation = True
+#   - Branch interactions vs natal: 子 clashes 午(year); 子 harms 未(month).
+#     子 vs 巳(day) and 子 vs 寅(hour) match nothing. (寅 harms 巳, but
+#     that's a purely-natal pair with no liu_nian involvement, so it must
+#     NOT appear in the filtered result.)
+# ---------------------------------------------------------------------------
+
+def test_analyze_liu_nian_full_worked_example():
+    pillars = _pillars("戊午", "辛未", "己巳", "甲寅")
+    result = analyze_liu_nian(pillars, 1984)
+
+    assert result["year"] == 1984
+    assert result["pillar"] == "甲子"
+    assert result["ten_gods"] == {"stem": "Direct Officer", "branch": "Indirect Wealth"}
+
+    combo = result["stem_combination_with_day_master"]
+    assert combo is not None
+    assert set(combo["stems"]) == {"甲", "己"}
+    assert combo["element"] == "Earth"
+    assert combo["season_supports_transformation"] is True
+
+    interactions = result["branch_interactions"]
+    assert len(interactions) == 2
+
+    clash = next(i for i in interactions if i["type"] == "clash")
+    assert set(clash["branches"]) == {"子", "午"}
+    assert clash["positions"] == ["year", "liu_nian"]
+
+    harm = next(i for i in interactions if i["type"] == "harm")
+    assert set(harm["branches"]) == {"子", "未"}
+    assert harm["positions"] == ["month", "liu_nian"]
+
+    # No purely-natal interaction (e.g. 寅-巳 harm) should leak into the
+    # Liu-Nian-filtered result.
+    assert all("liu_nian" in i["positions"] for i in interactions)
+
+
+def test_analyze_liu_nian_no_day_master_combination_when_stems_dont_pair():
+    # Day Master 甲 vs Liu Nian stem 甲 (also 1984) - same stem, not a
+    # valid combination pair, so this must be None, not accidentally matched.
+    pillars = _pillars("丙寅", "戊辰", "甲午", "庚午")
+    result = analyze_liu_nian(pillars, 1984)
+    assert result["stem_combination_with_day_master"] is None

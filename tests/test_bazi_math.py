@@ -18,6 +18,7 @@ from core.bazi_math import (
     get_element_counts,
     get_ten_god,
     calculate_chart_ten_gods,
+    get_year_pillar,
     STEM_ATTRIBUTES,
     BRANCH_MAIN_QI,
 )
@@ -38,6 +39,17 @@ def test_jiazi_epoch_years_have_jiazi_year_pillar(year):
     year ambiguity near Jan/Feb."""
     pillars, _ = calculate_bazi_chart(year, 6, 15, 12, 0, "Male")
     assert pillars["year"] == "甲子"
+
+
+@pytest.mark.parametrize("year", [1924, 1984, 2044])
+def test_get_year_pillar_matches_jiazi_epoch(year):
+    """get_year_pillar() (used for Liu Nian, not tied to any birth chart)
+    must agree with the same epoch fact as the natal year pillar above."""
+    assert get_year_pillar(year) == "甲子"
+
+
+def test_get_year_pillar_cycles_every_60_years():
+    assert get_year_pillar(1990) == get_year_pillar(1990 + 60)
 
 
 def test_year_pillar_cycles_every_60_years():
