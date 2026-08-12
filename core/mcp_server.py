@@ -8,7 +8,7 @@ from mcp.server.fastmcp import FastMCP
 
 from core.time_engine import get_true_solar_time
 from core.bazi_math import calculate_bazi_chart, get_element_counts, calculate_chart_ten_gods
-from core.bazi_interactions import find_branch_interactions
+from core.bazi_interactions import find_branch_interactions, find_stem_combinations
 from core.rag import get_index
 
 mcp = FastMCP("bazi-engine")
@@ -21,11 +21,12 @@ def calculate_full_chart(year: int, month: int, day: int, hour: int, minute: int
     Chains true-solar-time correction, the Four Pillars calculation, the Da Yun
     (10-year luck pillar) cycles, the Five Elements distribution, the Ten
     Gods (Shishen) for each pillar's stem AND branch (via the branch's dominant
-    hidden stem) relative to the Day Master, and every active branch
-    interaction (clashes/combinations/three-harmonies/punishments/harms/
-    breaks) between the four natal branches. Use this for any question about
-    a specific person's chart - it's the fastest way to get everything
-    needed for a reading in one call.
+    hidden stem) relative to the Day Master, every active branch interaction
+    (clashes/combinations/three-harmonies/punishments/harms/breaks) between
+    the four natal branches, and every adjacent-pillar Heavenly Stem
+    combination (天干五合). Use this for any question about a specific
+    person's chart - it's the fastest way to get everything needed for a
+    reading in one call.
 
     gender must be "Male" or "Female" (affects the Da Yun sequence direction).
     """
@@ -36,6 +37,7 @@ def calculate_full_chart(year: int, month: int, day: int, hour: int, minute: int
     elements = get_element_counts(pillars)
     ten_gods = calculate_chart_ten_gods(pillars)
     branch_interactions = find_branch_interactions(pillars)
+    stem_combinations = find_stem_combinations(pillars)
 
     return {
         "pillars": pillars,
@@ -43,6 +45,7 @@ def calculate_full_chart(year: int, month: int, day: int, hour: int, minute: int
         "elements": elements,
         "ten_gods": ten_gods,
         "branch_interactions": branch_interactions,
+        "stem_combinations": stem_combinations,
         "true_solar_time": {
             "year": adj_year, "month": adj_month, "day": adj_day,
             "hour": adj_hour, "minute": adj_minute,
@@ -85,6 +88,27 @@ def get_branch_interactions(pillars: dict) -> dict:
     the resulting element for combinations/three-harmonies. An empty list
     means no interactions are active in this chart - don't invent any."""
     return {"interactions": find_branch_interactions(pillars)}
+
+
+@mcp.tool()
+def get_stem_combinations(pillars: dict) -> dict:
+    """Detect Heavenly Stem combinations (天干五合) between ADJACENT
+    pillars' stems (Year-Month, Month-Day, Day-Hour) - non-adjacent stem
+    pairs are deliberately not flagged, since that combination effect is
+    much weaker in practice. `pillars` must have "year"/"month"/"day"/"hour"
+    keys, each a 2-character stem+branch string, as returned by
+    calculate_full_chart.
+
+    Each result flags "involves_day_master" (traditionally the most
+    significant case - the self being pulled toward/tied to whatever the
+    other stem represents) and a "season_supports_transformation" heuristic
+    (whether the Month branch's element matches or generates the resulting
+    element - one of several traditional conditions for true transformation
+    合化 vs. a structural-only combination 合而不化; it does not check
+    whether the resulting element is opposed elsewhere in the chart, so
+    treat it as a signal to weigh, not a final verdict). An empty list means
+    no adjacent stem combinations are present - don't invent any."""
+    return {"combinations": find_stem_combinations(pillars)}
 
 
 @mcp.tool()
