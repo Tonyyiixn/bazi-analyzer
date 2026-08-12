@@ -1,9 +1,10 @@
-"""Tests for core/bazi_interactions.py - branch interaction detection.
+"""Tests for core/bazi_interactions.py - branch and stem interaction
+detection.
 
 These build synthetic pillar dicts (not full lunar_python charts) so each
 interaction type can be tested in isolation with a precise, minimal example.
 """
-from core.bazi_interactions import find_branch_interactions
+from core.bazi_interactions import find_branch_interactions, find_stem_combinations
 
 
 def _pillars(year, month, day, hour):
@@ -125,3 +126,58 @@ def test_tables_match_the_rag_principle_doc():
     assert set(PUNISHMENT_INGRATITUDE) == {'丑', '戌', '未'}
     assert set(PUNISHMENT_RUDENESS) == {'子', '卯'}
     assert set(SELF_PUNISH_BRANCHES) == {'辰', '午', '酉', '亥'}
+
+
+# ---------------------------------------------------------------------------
+# Stem combinations (天干五合)
+# ---------------------------------------------------------------------------
+
+def test_adjacent_stem_combination_detected_with_season_support():
+    # Year=甲子, Month=己丑: 甲+己 adjacent -> Earth. Month branch 丑 is Earth
+    # itself, so season_supports_transformation should be True.
+    pillars = _pillars("甲子", "己丑", "戊寅", "庚辰")
+    combos = find_stem_combinations(pillars)
+    assert len(combos) == 1
+    assert set(combos[0]["stems"]) == {"甲", "己"}
+    assert combos[0]["positions"] == ["year", "month"]
+    assert combos[0]["element"] == "Earth"
+    assert combos[0]["involves_day_master"] is False
+    assert combos[0]["season_supports_transformation"] is True
+
+
+def test_day_master_combination_flagged_with_low_season_support():
+    # Day=丙申, Hour=辛巳: 丙+辛 adjacent -> Water. Month branch 辰 is Earth,
+    # which neither matches nor generates toward Water, so season support
+    # should be False. Day is involved, so involves_day_master is True.
+    pillars = _pillars("甲子", "戊辰", "丙申", "辛巳")
+    combos = find_stem_combinations(pillars)
+    assert len(combos) == 1
+    assert set(combos[0]["stems"]) == {"丙", "辛"}
+    assert combos[0]["positions"] == ["day", "hour"]
+    assert combos[0]["element"] == "Water"
+    assert combos[0]["involves_day_master"] is True
+    assert combos[0]["season_supports_transformation"] is False
+
+
+def test_non_adjacent_stem_pair_is_not_flagged():
+    # Year=甲 and Day=己 would combine to Earth, but they are NOT adjacent
+    # (Month sits between them) - the practical convention is to ignore this.
+    pillars = _pillars("甲子", "丙寅", "己巳", "壬申")
+    assert find_stem_combinations(pillars) == []
+
+
+def test_no_combination_when_no_pair_matches():
+    pillars = _pillars("甲子", "丙寅", "戊辰", "庚午")
+    assert find_stem_combinations(pillars) == []
+
+
+def test_stem_combination_tables_match_the_rag_principle_doc():
+    from core.bazi_interactions import STEM_COMBINATIONS
+    expected = {
+        frozenset(('甲', '己')): 'Earth',
+        frozenset(('乙', '庚')): 'Metal',
+        frozenset(('丙', '辛')): 'Water',
+        frozenset(('丁', '壬')): 'Wood',
+        frozenset(('戊', '癸')): 'Fire',
+    }
+    assert STEM_COMBINATIONS == expected
