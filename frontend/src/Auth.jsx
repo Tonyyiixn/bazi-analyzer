@@ -10,10 +10,10 @@ export default function Auth() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    
+
     // Choose the endpoint based on whether we are logging in or signing up
     const endpoint = isLogin ? '/api/v1/login' : '/api/v1/signup';
-    
+
     try {
       const response = await fetch(`http://127.0.0.1:8000${endpoint}`, {
         method: 'POST',
@@ -43,14 +43,14 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border-t-4 border-indigo-500">
-        <h2 className="text-3xl font-bold text-slate-800 mb-6 text-center">
+    <div className="min-h-screen bg-ink-950 flex flex-col justify-center items-center p-4">
+      <div className="bg-ink-900 p-8 rounded w-full max-w-md border border-ink-700">
+        <h2 className="text-2xl font-serif-display text-parchment-100 mb-6 text-center">
           {isLogin ? 'Welcome Back' : 'Create Account'}
         </h2>
-        
+
         {error && (
-          <div className={`p-3 rounded mb-4 text-sm font-medium ${error.includes('created') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+          <div className={`p-3 rounded mb-4 text-sm font-medium border ${error.includes('created') ? 'bg-jade-500/10 border-jade-600 text-jade-400' : 'bg-el-fire/10 border-el-fire text-el-fire'}`}>
             {error}
           </div>
         )}
@@ -58,48 +58,48 @@ export default function Auth() {
         <form onSubmit={handleSubmit} className="space-y-4">
           {!isLogin && (
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
-              <input 
-                type="text" 
-                className="w-full border border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 outline-none"
+              <label className="block text-sm font-medium text-parchment-400 mb-1">Name</label>
+              <input
+                type="text"
+                className="w-full bg-ink-950 border border-ink-700 text-parchment-200 rounded p-3 focus:ring-1 focus:ring-gold-500 focus:border-gold-500 outline-none"
                 value={formData.name}
                 onChange={(e) => setFormData({...formData, name: e.target.value})}
               />
             </div>
           )}
-          
+
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-            <input 
-              type="email" 
+            <label className="block text-sm font-medium text-parchment-400 mb-1">Email</label>
+            <input
+              type="email"
               required
-              className="w-full border border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="w-full bg-ink-950 border border-ink-700 text-parchment-200 rounded p-3 focus:ring-1 focus:ring-gold-500 focus:border-gold-500 outline-none"
               value={formData.email}
               onChange={(e) => setFormData({...formData, email: e.target.value})}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-            <input 
-              type="password" 
+            <label className="block text-sm font-medium text-parchment-400 mb-1">Password</label>
+            <input
+              type="password"
               required
-              className="w-full border border-slate-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="w-full bg-ink-950 border border-ink-700 text-parchment-200 rounded p-3 focus:ring-1 focus:ring-gold-500 focus:border-gold-500 outline-none"
               value={formData.password}
               onChange={(e) => setFormData({...formData, password: e.target.value})}
             />
           </div>
 
-          <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition">
+          <button type="submit" className="w-full bg-gold-500 text-ink-950 font-semibold py-3 rounded hover:bg-gold-400 transition">
             {isLogin ? 'Log In' : 'Sign Up'}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-slate-500">
+        <p className="mt-6 text-center text-sm text-parchment-600">
           {isLogin ? "Don't have an account? " : "Already have an account? "}
-          <button 
-            onClick={() => { setIsLogin(!isLogin); setError(null); }} 
-            className="text-indigo-600 font-bold hover:underline"
+          <button
+            onClick={() => { setIsLogin(!isLogin); setError(null); }}
+            className="text-gold-500 font-semibold hover:text-gold-400 hover:underline"
           >
             {isLogin ? 'Sign up' : 'Log in'}
           </button>

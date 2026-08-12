@@ -1,1 +1,46 @@
 @import 'tailwindcss';
+
+@theme {
+  /* Ink & Jade - dark ink ground, jade + antique gold accents */
+  --color-ink-950: #14140f;
+  --color-ink-900: #1a1a13;
+  --color-ink-800: #22221a;
+  --color-ink-700: #2a2a20;
+  --color-ink-600: #3a3a2c;
+
+  --color-parchment-100: #f2f0ea;
+  --color-parchment-200: #e8e5da;
+  --color-parchment-400: #9a9787;
+  --color-parchment-600: #6b6857;
+
+  --color-gold-300: #e3d193;
+  --color-gold-400: #ddc57a;
+  --color-gold-500: #cdb35a;
+  --color-gold-600: #a88f3f;
+
+  --color-jade-300: #a9d3b6;
+  --color-jade-400: #8fbf9e;
+  --color-jade-500: #6fa583;
+  --color-jade-600: #4f7d61;
+
+  /* Five Elements, harmonized for the ink ground (replaces the old bright green/red/amber/yellow/blue) */
+  --color-el-wood: #7fb88f;
+  --color-el-fire: #bd6a49;
+  --color-el-earth: #b08d52;
+  --color-el-metal: #d4c48a;
+  --color-el-water: #5f8ea6;
+
+  --font-serif-display: Georgia, "Times New Roman", serif;
+}
+
+body {
+  background: var(--color-ink-950);
+}
+
+.no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}

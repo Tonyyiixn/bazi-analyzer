@@ -76,6 +76,7 @@ STEM_ATTRIBUTES = {
     '寅': {'element': 'Wood', 'polarity': 'Yang'},
     '卯': {'element': 'Wood', 'polarity': 'Yin'},
     '辰': {'element': 'Earth', 'polarity': 'Yang'},
+    '丑': {'element': 'Earth', 'polarity': 'Yin'},
     '巳': {'element': 'Fire', 'polarity': 'Yin'},
     '午': {'element': 'Fire', 'polarity': 'Yang'},
     '未': {'element': 'Earth', 'polarity': 'Yin'},

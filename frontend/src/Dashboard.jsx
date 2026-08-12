@@ -51,76 +51,75 @@ export default function Dashboard() {
 
       // If successful, instantly remove it from the screen without refreshing the page!
       setCharts(charts.filter(chart => chart.id !== chartId));
-      
+
     } catch (err) {
       alert("Error: " + err.message);
     }
   };
   // --------------------------------
 
-  if (loading) return <div className="text-center py-20 text-slate-500 font-bold animate-pulse">Unlocking your vault...</div>;
-  if (error) return <div className="text-center py-20 text-red-500 font-bold">Error: {error}</div>;
+  if (loading) return <div className="text-center py-20 text-parchment-400 font-semibold animate-pulse">Unlocking your vault...</div>;
+  if (error) return <div className="text-center py-20 text-el-fire font-semibold">Error: {error}</div>;
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4">
-      
+
       {/* NEW: THE BACK BUTTON */}
       <div className="mb-6">
-        <Link to="/" className="text-indigo-500 hover:text-indigo-700 font-bold flex items-center gap-2 transition">
+        <Link to="/" className="text-gold-500 hover:text-gold-400 font-semibold flex items-center gap-2 transition">
           <span>←</span> Back to Calculator
         </Link>
       </div>
 
-      <h2 className="text-3xl font-extrabold text-slate-800 mb-8 flex items-center gap-3">
-        <span>🗄️</span> My Saved Charts
+      <h2 className="text-2xl font-serif-display text-parchment-100 mb-8">
+        My Saved Charts
       </h2>
 
       {charts.length === 0 ? (
-        <div className="bg-white p-10 rounded-2xl shadow-sm text-center border-2 border-dashed border-slate-200">
-          <p className="text-slate-500 mb-6 text-lg">Your vault is currently empty!</p>
-          <Link to="/" className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-8 py-3 rounded-full font-bold hover:scale-105 transition-transform shadow-md inline-block">
+        <div className="bg-ink-900 p-10 rounded text-center border border-dashed border-ink-700">
+          <p className="text-parchment-400 mb-6 text-lg">Your vault is currently empty.</p>
+          <Link to="/" className="bg-gold-500 text-ink-950 px-8 py-3 rounded font-semibold hover:bg-gold-400 transition inline-block">
             Calculate a Chart
           </Link>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {charts.map((chart) => (
-            <div key={chart.id} className="bg-white p-6 rounded-2xl shadow-md border-t-4 border-indigo-500 hover:shadow-lg transition relative">
-              
-              {/* NEW: THE DELETE BUTTON (Trash Can Icon) */}
-              <button 
+            <div key={chart.id} className="bg-ink-900 border border-ink-700 p-6 rounded hover:border-gold-600 transition relative">
+
+              {/* NEW: THE DELETE BUTTON */}
+              <button
                 onClick={() => handleDelete(chart.id)}
-                className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition text-xl"
+                className="absolute top-4 right-4 text-parchment-600 hover:text-el-fire transition text-sm"
                 title="Delete Chart"
               >
-                🗑️
+                Delete
               </button>
 
-              <div className="mb-4 pr-8">
-                <h3 className="text-xl font-bold text-indigo-900">{chart.name}</h3>
-                <span className="text-xs text-slate-400 font-medium">
+              <div className="mb-4 pr-12">
+                <h3 className="text-lg font-serif-display text-parchment-100">{chart.name}</h3>
+                <span className="text-xs text-parchment-600 font-medium">
                   {new Date(chart.created_at).toLocaleDateString()}
                 </span>
               </div>
-              
+
               {/* Quick preview of the pillars */}
-              <div className="bg-slate-50 rounded-lg p-3 flex justify-between text-center border border-slate-100 mb-4">
+              <div className="bg-ink-950 rounded p-3 flex justify-between text-center border border-ink-700 mb-4">
                 {['year', 'month', 'day', 'hour'].map(pillar => (
                   <div key={pillar}>
-                    <p className="text-[10px] text-slate-400 uppercase font-bold">{pillar}</p>
-                    <p className="font-medium text-slate-700">{chart.chart_data.pillars[pillar]}</p>
+                    <p className="text-[10px] text-parchment-600 uppercase font-semibold">{pillar}</p>
+                    <p className="font-serif-display text-parchment-200">{chart.chart_data.pillars[pillar]}</p>
                   </div>
                 ))}
               </div>
-              
-              <div className="text-sm text-slate-500 line-clamp-2 italic mb-4">
-                {chart.ai_reading ? "AI Analysis attached ✨" : "No AI Analysis attached"}
+
+              <div className="text-sm text-parchment-600 italic mb-4">
+                {chart.ai_reading ? "AI analysis attached" : "No AI analysis attached"}
               </div>
 
-              {/* NEW: VIEW FULL CHART BUTTON (Placeholder for now) */}
-              <Link 
+              <Link
                 to={`/chart/${chart.id}`}
-                className="w-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-bold py-2 rounded-lg transition text-center block"
+                className="w-full bg-ink-950 border border-ink-700 text-gold-500 hover:border-gold-500 font-semibold py-2 rounded transition text-center block"
               >
                 View Full Chart
               </Link>

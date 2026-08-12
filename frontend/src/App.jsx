@@ -1,10 +1,18 @@
-import { useState , useEffect, use } from 'react'
+import { useState , useEffect } from 'react'
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom'
 import Auth from './Auth'
 import Dashboard from './Dashboard';
 import ChartDetail from './ChartDetail';
 import Results from './Results';
 import Chat from './Chat';
+import WheelPicker from './WheelPicker';
+
+const YEAR_OPTIONS = Array.from({ length: 2100 - 1900 + 1 }, (_, i) => 1900 + i);
+const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => i);
+const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => i);
+const daysInMonth = (year, month) => new Date(year, month, 0).getDate();
+const pad2 = (n) => String(n).padStart(2, '0');
 
 // Helper function to colorize Chinese characters based on their Bazi Element
 const getElementColor = (char) => {
@@ -14,13 +22,13 @@ const getElementColor = (char) => {
   const metal = ['庚', '辛', '申', '酉'];
   const water = ['壬', '癸', '亥', '子'];
 
-  if (wood.includes(char)) return 'text-green-500';
-  if (fire.includes(char)) return 'text-red-500';
-  if (earth.includes(char)) return 'text-amber-700';
-  if (metal.includes(char)) return 'text-yellow-500';
-  if (water.includes(char)) return 'text-blue-500';
+  if (wood.includes(char)) return 'text-el-wood';
+  if (fire.includes(char)) return 'text-el-fire';
+  if (earth.includes(char)) return 'text-el-earth';
+  if (metal.includes(char)) return 'text-el-metal';
+  if (water.includes(char)) return 'text-el-water';
 
-  return 'text-slate-800'; // Default fallback
+  return 'text-parchment-200'; // Default fallback
 };
 
 function App() {
@@ -71,14 +79,31 @@ function App() {
   // checkbox; the rectifier flips it off as a smart default since its hour
   // is only a ~2hr block estimate, but the user has final say.
   const [useTrueSolarTime, setUseTrueSolarTime] = useState(true);
+  // Whether the date/time wheels are expanded for picking, vs. collapsed to
+  // a compact YYYY/MM/DD or HH:MM display.
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [isTimePickerOpen, setIsTimePickerOpen] = useState(false);
 
+  // Only Name/Gender/City go through this now - Year/Month/Day/Hour/Minute
+  // are set directly by the wheel pickers via setYear/setMonth/setDay/setHour/setMinute.
   const handleChange = (e) => {
     const { name, value } = e.target;
-    const parsedValue = ['year', 'month', 'day', 'hour', 'minute'].includes(name)
-      ? parseInt(value) || ''
-      : value;
-    setFormData({ ...formData, [name]: parsedValue });
+    setFormData({ ...formData, [name]: value });
   };
+
+  // Year/Month/Day are picked via scrollable wheels; Day's option list
+  // depends on Year+Month, so clamp it whenever either changes.
+  const dayOptions = Array.from({ length: daysInMonth(formData.year || 2000, formData.month || 1) }, (_, i) => i + 1);
+  const setHour = (hour) => setFormData((prev) => ({ ...prev, hour }));
+  const setMinute = (minute) => setFormData((prev) => ({ ...prev, minute }));
+
+  const setYear = (year) => {
+    setFormData((prev) => ({ ...prev, year, day: Math.min(prev.day, daysInMonth(year, prev.month)) }));
+  };
+  const setMonth = (month) => {
+    setFormData((prev) => ({ ...prev, month, day: Math.min(prev.day, daysInMonth(prev.year, month)) }));
+  };
+  const setDay = (day) => setFormData((prev) => ({ ...prev, day }));
 
   // 3. The API Call to FastAPI
   const handleCalculate = async (e) => {
@@ -135,7 +160,7 @@ function App() {
       // and update the main form data!
       const timeString = data.data.inferred_time_block;
       const inferredHour = parseInt(timeString.split(':')[0]);
-      
+
       setFormData(prev => ({ ...prev, hour: inferredHour }));
       setUseTrueSolarTime(false); // it's a ~2hr block estimate, not a precise time - user can re-enable below
 
@@ -165,7 +190,7 @@ function App() {
         throw new Error("Failed to save the chart.");
       }
 
-      alert("✨ Chart saved successfully to your Vault!");
+      alert("Chart saved to your Vault.");
 
     } catch (err) {
       alert("Error: " + err.message);
@@ -175,28 +200,28 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center py-10 px-4">
+    <div className="min-h-screen bg-ink-950 flex flex-col items-center py-10 px-4">
 
       {/* 1. THE TOP NAVIGATION BAR */}
-      <div className="w-full max-w-4xl flex justify-between items-center mb-8 bg-white p-4 rounded-xl shadow-sm border-b-2 border-indigo-100">
-        <Link to="/" className="text-xl font-bold text-indigo-900 flex items-center gap-2">
-          <span>🌌</span> Bazi AI
+      <div className="w-full max-w-4xl flex justify-between items-center mb-8 bg-ink-900 p-4 rounded border border-ink-700">
+        <Link to="/" className="text-xl font-serif-display text-gold-500 flex items-baseline gap-2">
+          <span>命</span> <span className="text-parchment-200">Bazi</span>
         </Link>
         <div>
           {isAuthenticated ? (
-            <div className="flex items-center gap-6">
-              <Link to="/chat" className="text-indigo-600 font-bold hover:text-indigo-800 transition">
-                🤖 AI Agent
+            <div className="flex items-center gap-6 text-sm">
+              <Link to="/chat" className="text-parchment-400 hover:text-gold-400 font-medium transition">
+                Agent
               </Link>
-              <Link to="/dashboard" className="text-indigo-600 font-bold hover:text-indigo-800 transition">
-                My Vault
+              <Link to="/dashboard" className="text-parchment-400 hover:text-gold-400 font-medium transition">
+                Vault
               </Link>
-            <button onClick={handleLogout} className="text-slate-500 hover:text-red-500 font-bold transition">
+            <button onClick={handleLogout} className="text-parchment-600 hover:text-el-fire font-medium transition">
                 Log Out
             </button>
         </div>
           ) : (
-            <Link to="/login" className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-5 py-2 rounded-full font-bold hover:scale-105 transition-transform shadow-md">
+            <Link to="/login" className="bg-gold-500 text-ink-950 px-5 py-2 rounded font-semibold hover:bg-gold-400 transition">
               Log In
             </Link>
           )}
@@ -205,7 +230,7 @@ function App() {
 
       {/* 2. THE TRAFFIC COP (ROUTER) */}
       <Routes>
-        
+
         {/* Route A: The Login Page */}
         <Route path="/login" element={<Auth />} />
           {/* Route C: The Dashboard for Saved Charts */}
@@ -217,130 +242,165 @@ function App() {
         {/* Route B: The Main Calculator (Your existing code goes here!) */}
         <Route path="/" element={
           <div className="w-full flex flex-col items-center">
-            
+
             {/* >>> PASTE ALL YOUR EXISTING CALCULATOR UI HERE <<< */}
-            <h1 className="text-4xl font-extrabold text-slate-800 mb-8 tracking-tight">☯️ Bazi Calculator Pro</h1>
-      
+            <h1 className="text-4xl font-serif-display font-medium text-parchment-100 mb-8 tracking-tight">Bazi Calculator</h1>
+
       {/* THE INPUT FORM */}
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-3xl mb-8">
-        <h2 className="text-2xl font-bold text-slate-700 mb-6 border-b pb-2">Enter Birth Details</h2>
-        
+      <div className="bg-ink-900 border border-ink-700 p-8 rounded w-full max-w-3xl mb-8">
+        <h2 className="text-xl font-serif-display text-parchment-100 mb-6 border-b border-ink-700 pb-3">Enter Birth Details</h2>
+
         <form onSubmit={handleCalculate} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Name</label>
-              <input type="text" name="name" value={formData.name} onChange={handleChange} className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" required />
+              <label className="block text-sm font-medium text-parchment-400 mb-1">Name</label>
+              <input type="text" name="name" value={formData.name} onChange={handleChange} className="w-full bg-ink-950 border border-ink-700 text-parchment-200 rounded p-2 focus:ring-1 focus:ring-gold-500 focus:border-gold-500 outline-none" required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Gender</label>
-              <select name="gender" value={formData.gender} onChange={handleChange} className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+              <label className="block text-sm font-medium text-parchment-400 mb-1">Gender</label>
+              <select name="gender" value={formData.gender} onChange={handleChange} className="w-full bg-ink-950 border border-ink-700 text-parchment-200 rounded p-2 focus:ring-1 focus:ring-gold-500 focus:border-gold-500 outline-none">
                 <option value="M">Male</option>
                 <option value="F">Female</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Birth City</label>
-              <input type="text" name="city" value={formData.city} onChange={handleChange} className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" required />
+              <label className="block text-sm font-medium text-parchment-400 mb-1">Birth City</label>
+              <input type="text" name="city" value={formData.city} onChange={handleChange} className="w-full bg-ink-950 border border-ink-700 text-parchment-200 rounded p-2 focus:ring-1 focus:ring-gold-500 focus:border-gold-500 outline-none" required />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Year</label>
-              <input type="number" name="year" value={formData.year} onChange={handleChange} min="1900" max="2100" className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" required />
+              <label className="block text-sm font-medium text-parchment-400 mb-2">Birth Date(YYYY-MM-DD)</label>
+
+              {!isDatePickerOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setIsDatePickerOpen(true)}
+                  className="w-full max-w-md text-left bg-ink-950 border border-ink-700 text-parchment-200 rounded p-2 hover:border-gold-500 transition font-serif-display tracking-wide"
+                >
+                  {formData.year}/{String(formData.month).padStart(2, '0')}/{String(formData.day).padStart(2, '0')}
+                </button>
+              ) : (
+                <div className="max-w-md">
+                  <div className="grid grid-cols-3 gap-4">
+                    <WheelPicker options={YEAR_OPTIONS} value={formData.year} onChange={setYear} itemHeight={48} visibleItems={5} fontSize="text-lg" />
+                    <WheelPicker options={MONTH_OPTIONS} value={formData.month} onChange={setMonth} itemHeight={48} visibleItems={5} fontSize="text-lg" />
+                    <WheelPicker options={dayOptions} value={formData.day} onChange={setDay} itemHeight={48} visibleItems={5} fontSize="text-lg" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsDatePickerOpen(false)}
+                    className="mt-3 w-full bg-gold-500 text-ink-950 font-semibold py-2 rounded hover:bg-gold-400 transition"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Month</label>
-              <input type="number" name="month" value={formData.month} onChange={handleChange} min="1" max="12" className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" required />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-600 mb-1">Day</label>
-              <input type="number" name="day" value={formData.day} onChange={handleChange} min="1" max="31" className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" required />
-            </div>
-            <div>
+            <div className="max-w-[220px]">
               <div className="flex justify-between items-end mb-1">
-                <label className="block text-sm font-medium text-slate-600">Time</label>
+                <label className="block text-sm font-medium text-parchment-400">Time</label>
                 <button
                   type="button"
                   onClick={() => setShowRectifier(!showRectifier)}
-                  className="text-xs text-indigo-500 hover:text-indigo-700 font-bold"
+                  className="text-xs text-gold-500 hover:text-gold-400 font-semibold"
                 >
-                  Don't know? 🪄
+                  Don't know?
                 </button>
               </div>
-              <div className="flex items-center gap-2">
-                <input type="number" name="hour" value={formData.hour} onChange={handleChange} min="0" max="23" placeholder="HH" className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" required />
-                <span className="text-slate-400 font-bold">:</span>
-                <input type="number" name="minute" value={formData.minute} onChange={handleChange} min="0" max="59" placeholder="MM" className="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" required />
-              </div>
+              {!isTimePickerOpen ? (
+                <button
+                  type="button"
+                  onClick={() => setIsTimePickerOpen(true)}
+                  className="w-full text-left bg-ink-950 border border-ink-700 text-parchment-200 rounded p-2 hover:border-gold-500 transition font-serif-display tracking-wide"
+                >
+                  {pad2(formData.hour)}:{pad2(formData.minute)}
+                </button>
+              ) : (
+                <div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <WheelPicker options={HOUR_OPTIONS} value={formData.hour} onChange={setHour} formatOption={pad2} itemHeight={48} visibleItems={5} fontSize="text-lg" />
+                    <WheelPicker options={MINUTE_OPTIONS} value={formData.minute} onChange={setMinute} formatOption={pad2} itemHeight={48} visibleItems={5} fontSize="text-lg" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsTimePickerOpen(false)}
+                    className="mt-3 w-full bg-gold-500 text-ink-950 font-semibold py-2 rounded hover:bg-gold-400 transition"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
           {/* True Solar Time toggle */}
-          <label className="flex items-center gap-2 text-sm text-slate-600 select-none cursor-pointer w-fit">
+          <div className="flex items-center gap-2 text-sm text-parchment-400 select-none w-fit">
             <input
               type="checkbox"
               checked={useTrueSolarTime}
               onChange={(e) => setUseTrueSolarTime(e.target.checked)}
-              className="w-4 h-4 accent-indigo-600"
+              className="w-4 h-4 accent-gold-500 cursor-pointer"
             />
             <span>Apply True Solar Time correction</span>
             <span
               title="Adjusts your birth time based on your city's longitude vs. its timezone's standard meridian, for a more precise Hour Pillar. Turn this off if your time above is only an estimate (e.g. from the AI Time Rectifier below) - the correction just adds false precision to a value that isn't precise to begin with."
-              className="text-slate-400 hover:text-indigo-500 font-bold cursor-help"
+              className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-parchment-600 text-parchment-600 hover:text-gold-400 hover:border-gold-400 text-xs font-bold cursor-help transition"
             >
               ⓘ
             </span>
-          </label>
+          </div>
+          
 
           {/* Dynamic Button State */}
           <button
-            type="submit" 
+            type="submit"
             disabled={isCalculating}
-            className={`w-full font-bold py-3 rounded-lg transition shadow-md ${isCalculating ? 'bg-indigo-400 cursor-not-allowed text-indigo-100' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+            className={`w-full font-semibold py-3 rounded transition ${isCalculating ? 'bg-ink-700 cursor-not-allowed text-parchment-600' : 'bg-gold-500 text-ink-950 hover:bg-gold-400'}`}
           >
-            {isCalculating ? 'Calculating Astrometry...' : 'Calculate Natal Chart'}
+            {isCalculating ? 'Calculating...' : 'Calculate Natal Chart'}
           </button>
 
           {/* Error Message Display */}
-          {error && <div className="text-red-500 text-sm text-center font-semibold mt-2">{error}</div>}
+          {error && <div className="text-el-fire text-sm text-center font-semibold mt-2">{error}</div>}
         </form>
         {/* --- AI TIME RECTIFICATION PANEL --- */}
         {showRectifier && (
-          <div className="mt-8 bg-indigo-50 border border-indigo-100 p-6 rounded-xl animate-fade-in-up">
-            <h3 className="text-lg font-bold text-indigo-900 mb-2 flex items-center gap-2">
-              <span>🕵️‍♂️</span> AI Time Rectification
+          <div className="mt-8 bg-ink-950 border border-ink-700 p-6 rounded">
+            <h3 className="text-base font-serif-display text-parchment-100 mb-2">
+              AI Time Rectification
             </h3>
-            <p className="text-sm text-slate-600 mb-4">
-              Describe your personality, how you handle stress, and your career style. Claude will analyze your Ten Gods (Shishen) to deduce your likely birth hour!
+            <p className="text-sm text-parchment-400 mb-4">
+              Describe your personality, how you handle stress, and your career style. Claude will analyze your Ten Gods (Shishen) to deduce your likely birth hour.
             </p>
-            
-            <textarea 
+
+            <textarea
               value={userTraits}
               onChange={(e) => setUserTraits(e.target.value)}
               placeholder="e.g., I am very rebellious, creative, and I hate strict rules. Under stress, I take charge...Please write as much as possible for accuracy"
-              className="w-full h-24 border border-indigo-200 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 outline-none mb-3"
+              className="w-full h-24 bg-ink-900 border border-ink-700 text-parchment-200 rounded p-3 focus:ring-1 focus:ring-gold-500 focus:border-gold-500 outline-none mb-3 placeholder:text-parchment-600"
             />
-            
-            <button 
+
+            <button
               type="button"
               onClick={handleRectifyTime}
               disabled={isRectifying || userTraits.length < 10}
-              className={`w-full py-2 rounded-lg font-bold transition ${isRectifying ? 'bg-indigo-300 text-white cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+              className={`w-full py-2 rounded font-semibold transition ${isRectifying ? 'bg-ink-700 text-parchment-600 cursor-not-allowed' : 'bg-gold-500 text-ink-950 hover:bg-gold-400'}`}
             >
               {isRectifying ? 'Analyzing Personality...' : 'Deduce My Birth Hour'}
             </button>
 
             {/* Results Output */}
             {rectifierResult && (
-              <div className="mt-4 bg-white p-4 rounded-lg shadow-sm border-l-4 border-emerald-500">
-                <p className="font-bold text-slate-800 text-sm mb-1">
-                  Dominant Energy: <span className="text-emerald-600">{rectifierResult.inferred_shishen}</span>
+              <div className="mt-4 bg-ink-900 p-4 rounded border-l-2 border-jade-500">
+                <p className="font-semibold text-parchment-100 text-sm mb-1">
+                  Dominant Energy: <span className="text-jade-400">{rectifierResult.inferred_shishen}</span>
                 </p>
-                <p className="text-sm text-slate-600 mb-2">
-                  <span className="font-semibold">Reasoning:</span> {rectifierResult.ai_reasoning}
+                <p className="text-sm text-parchment-400 mb-2">
+                  <span className="font-semibold text-parchment-200">Reasoning:</span> {rectifierResult.ai_reasoning}
                 </p>
-                <p className="text-xs font-bold text-slate-400 uppercase">
+                <p className="text-xs font-semibold text-parchment-600 uppercase tracking-wide">
                   Time auto-filled to: {rectifierResult.inferred_time_block}
                 </p>
               </div>
@@ -353,33 +413,33 @@ function App() {
       {/* THE RESULTS DASHBOARD (Only shows if chartData exists) */}
       {/* THE RESULTS DASHBOARD */}
       {chartData && (
-        <div className="space-y-8 w-full max-w-4xl animate-fade-in-up">
-          
+        <div className="space-y-8 w-full max-w-4xl">
+
           {/* MAIN CHART CARD */}
-          <div className="bg-white p-8 rounded-2xl shadow-xl border-t-4 border-indigo-500">
-            <h2 className="text-2xl font-bold text-slate-700 mb-6 text-center">Natal Chart (Four Pillars)</h2>
-            
+          <div className="bg-ink-900 border border-ink-700 p-8 rounded">
+            <h2 className="text-xl font-serif-display text-parchment-100 mb-6 text-center">Natal Chart (Four Pillars)</h2>
+
             {/* 1. The 4 Pillars & Ten Gods */}
             <div className="grid grid-cols-4 gap-4 mb-8">
               {['Year', 'Month', 'Day', 'Hour'].map((pillar) => {
                 const pKey = pillar.toLowerCase();
                 return (
                   <div key={pillar} className="text-center">
-                    <p className="text-xs text-slate-400 uppercase font-bold mb-2">{pillar}</p>
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md transition">
+                    <p className="text-xs text-parchment-600 uppercase tracking-widest font-semibold mb-2">{pillar}</p>
+                    <div className="bg-ink-950 border border-ink-700 rounded p-4">
                       {/* Stem (upper) */}
                       <div className="flex flex-col items-center">
-                        <span className={`text-3xl font-medium drop-shadow-sm ${getElementColor(chartData.pillars[pKey][0])}`}>
+                        <span className={`text-3xl font-serif-display ${getElementColor(chartData.pillars[pKey][0])}`}>
                           {chartData.pillars[pKey][0]}
                         </span>
-                        <span className="text-xs font-bold text-indigo-500 mt-1">{chartData.ten_gods[pKey].stem}</span>
+                        <span className="text-xs font-semibold text-gold-500 mt-1">{chartData.ten_gods[pKey].stem}</span>
                       </div>
                       {/* Branch (lower) */}
-                      <div className="flex flex-col items-center mt-2 pt-2 border-t border-slate-200">
-                        <span className={`text-3xl font-medium drop-shadow-sm ${getElementColor(chartData.pillars[pKey][1])}`}>
+                      <div className="flex flex-col items-center mt-2 pt-2 border-t border-ink-700">
+                        <span className={`text-3xl font-serif-display ${getElementColor(chartData.pillars[pKey][1])}`}>
                           {chartData.pillars[pKey][1]}
                         </span>
-                        <span className="text-xs font-bold text-emerald-600 mt-1">{chartData.ten_gods[pKey].branch}</span>
+                        <span className="text-xs font-semibold text-jade-500 mt-1">{chartData.ten_gods[pKey].branch}</span>
                       </div>
                     </div>
                   </div>
@@ -388,30 +448,30 @@ function App() {
             </div>
 
             {/* 2. Elemental Progress Bars */}
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 text-center">Element Strength</h3>
+            <h3 className="text-xs font-semibold text-parchment-600 uppercase tracking-widest mb-4 text-center">Element Strength</h3>
             <div className="grid grid-cols-5 gap-2 mb-8">
               {Object.entries(chartData.elements).map(([el, val]) => (
                 <div key={el} className="text-center">
-                  <div className="h-24 bg-slate-100 rounded-full relative overflow-hidden flex flex-col justify-end">
-                    <div 
-                      className={`w-full transition-all duration-1000 ${el === 'Wood' ? 'bg-green-500' : el === 'Fire' ? 'bg-red-500' : el === 'Earth' ? 'bg-amber-700' : el === 'Metal' ? 'bg-yellow-400' : 'bg-blue-500'}`} 
+                  <div className="h-24 bg-ink-950 border border-ink-700 rounded relative overflow-hidden flex flex-col justify-end">
+                    <div
+                      className={`w-full transition-all duration-700 ${el === 'Wood' ? 'bg-el-wood' : el === 'Fire' ? 'bg-el-fire' : el === 'Earth' ? 'bg-el-earth' : el === 'Metal' ? 'bg-el-metal' : 'bg-el-water'}`}
                       style={{ height: `${(val / 8) * 100}%` }}
                     ></div>
                   </div>
-                  <p className="text-xs font-bold mt-2 text-slate-600">{el} ({val})</p>
+                  <p className="text-xs font-semibold mt-2 text-parchment-400">{el} ({val})</p>
                 </div>
               ))}
             </div>
 
             {/* 3. The Da Yun (10-Year Luck Pillars) */}
-            <div className="pt-6 border-t border-slate-100">
-              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 text-center">10-Year Luck Pillars (Da Yun)</h3>
+            <div className="pt-6 border-t border-ink-700">
+              <h3 className="text-xs font-semibold text-parchment-600 uppercase tracking-widest mb-4 text-center">10-Year Luck Pillars (Da Yun)</h3>
               <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
                 {chartData.da_yuns.map((yun, index) => (
-                  <div key={index} className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-center shadow-sm hover:bg-indigo-50 transition cursor-default">
-                    <p className="text-xs font-bold text-slate-500 mb-1">{yun.start_age}y</p>
-                    <p className="text-[10px] text-slate-400 mb-1">{yun.start_year}</p>
-                    <p className="text-base font-medium text-slate-800">{yun.pillar}</p>
+                  <div key={index} className="bg-ink-950 border border-ink-700 rounded p-2 text-center hover:border-gold-500 transition cursor-default">
+                    <p className="text-xs font-semibold text-parchment-400 mb-1">{yun.start_age}y</p>
+                    <p className="text-[10px] text-parchment-600 mb-1">{yun.start_year}</p>
+                    <p className="text-base font-serif-display text-parchment-200">{yun.pillar}</p>
                   </div>
                 ))}
               </div>
@@ -420,28 +480,28 @@ function App() {
 
           {/* THE SAVE BUTTON */}
           <div className="flex justify-center mt-6">
-            <button 
+            <button
               onClick={handleSaveChart}
               disabled={isSaving}
-              className={`px-8 py-3 rounded-xl font-bold shadow-sm transition-transform flex items-center gap-2 ${
-                isSaving 
-                  ? 'bg-slate-200 cursor-not-allowed text-slate-400' 
-                  : 'bg-emerald-500 text-white hover:bg-emerald-600 hover:scale-105'
+              className={`px-8 py-3 rounded font-semibold transition flex items-center gap-2 ${
+                isSaving
+                  ? 'bg-ink-700 cursor-not-allowed text-parchment-600'
+                  : 'bg-jade-500 text-ink-950 hover:bg-jade-400'
               }`}
             >
-              {isSaving ? '💾 Saving...' : '💾 Save Chart to Profile'}
+              {isSaving ? 'Saving...' : 'Save Chart to Profile'}
             </button>
           </div>
         </div>
       )}
             {/* (The title, the input form, the chartData cards, the Gemini AI button, etc.) */}
-            
+
           </div>
         } />
 
       </Routes>
 
-      
+
     </div>
   )
 }
