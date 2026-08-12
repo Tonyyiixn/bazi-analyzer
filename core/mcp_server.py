@@ -8,6 +8,7 @@ from mcp.server.fastmcp import FastMCP
 
 from core.time_engine import get_true_solar_time
 from core.bazi_math import calculate_bazi_chart, get_element_counts, calculate_chart_ten_gods
+from core.bazi_interactions import find_branch_interactions
 from core.rag import get_index
 
 mcp = FastMCP("bazi-engine")
@@ -18,11 +19,13 @@ def calculate_full_chart(year: int, month: int, day: int, hour: int, minute: int
     """Compute a complete Bazi natal chart for a birth date/time/city.
 
     Chains true-solar-time correction, the Four Pillars calculation, the Da Yun
-    (10-year luck pillar) cycles, the Five Elements distribution, and the Ten
+    (10-year luck pillar) cycles, the Five Elements distribution, the Ten
     Gods (Shishen) for each pillar's stem AND branch (via the branch's dominant
-    hidden stem) relative to the Day Master. Use this for any question about a
-    specific person's chart - it's the fastest way to get everything needed
-    for a reading in one call.
+    hidden stem) relative to the Day Master, and every active branch
+    interaction (clashes/combinations/three-harmonies/punishments/harms/
+    breaks) between the four natal branches. Use this for any question about
+    a specific person's chart - it's the fastest way to get everything
+    needed for a reading in one call.
 
     gender must be "Male" or "Female" (affects the Da Yun sequence direction).
     """
@@ -32,12 +35,14 @@ def calculate_full_chart(year: int, month: int, day: int, hour: int, minute: int
     pillars, da_yuns = calculate_bazi_chart(adj_year, adj_month, adj_day, adj_hour, adj_minute, gender)
     elements = get_element_counts(pillars)
     ten_gods = calculate_chart_ten_gods(pillars)
+    branch_interactions = find_branch_interactions(pillars)
 
     return {
         "pillars": pillars,
         "da_yuns": da_yuns,
         "elements": elements,
         "ten_gods": ten_gods,
+        "branch_interactions": branch_interactions,
         "true_solar_time": {
             "year": adj_year, "month": adj_month, "day": adj_day,
             "hour": adj_hour, "minute": adj_minute,
@@ -61,6 +66,25 @@ def get_ten_gods(pillars: dict) -> dict:
     stem+branch string, as returned by calculate_full_chart. Returns, per
     pillar, {"stem": <Ten God>, "branch": <Ten God>}."""
     return calculate_chart_ten_gods(pillars)
+
+
+@mcp.tool()
+def get_branch_interactions(pillars: dict) -> dict:
+    """Detect every active Earthly Branch interaction between a chart's
+    Year/Month/Day/Hour branches - clashes (沖), combinations (合),
+    three-harmonies (三合, full or partial), punishments (刑), harms (害),
+    and breaks (破). `pillars` must have "year"/"month"/"day"/"hour" keys,
+    each a 2-character stem+branch string, as returned by
+    calculate_full_chart.
+
+    This is deterministic rule-detection, not judgment - use it instead of
+    inspecting the branches yourself, since spotting these interactions by
+    eye is exactly the kind of structural lookup that's easy to get wrong.
+    Each result includes which pillar(s) are involved (e.g. "day"+"hour")
+    so you can say precisely which parts of the chart are affected, plus
+    the resulting element for combinations/three-harmonies. An empty list
+    means no interactions are active in this chart - don't invent any."""
+    return {"interactions": find_branch_interactions(pillars)}
 
 
 @mcp.tool()
