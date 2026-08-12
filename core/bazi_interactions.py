@@ -1,14 +1,29 @@
-"""Detects Earthly Branch interactions in a Bazi chart - clashes,
-combinations, three-harmonies, punishments, harms, and breaks - as
-deterministic rule application, not LLM judgment.
+"""Detects Earthly Branch and Heavenly Stem interactions in a Bazi chart -
+clashes, combinations, three-harmonies, punishments, harms, breaks, and
+stem combinations - as deterministic rule application, not LLM judgment.
 
-The tables here are kept in lockstep with
-core/knowledge/principles/branch_clashes_and_combinations.md (the RAG
-principle doc covering this same theory in prose) so a computed answer here
-never contradicts what search_bazi_principles retrieves.
+The tables here are kept in lockstep with the RAG principle docs covering
+this same theory in prose (branch_clashes_and_combinations.md,
+stem_combinations.md) so a computed answer here never contradicts what
+search_bazi_principles retrieves.
 """
 
+from core.bazi_math import STEM_ATTRIBUTES
+
 PILLAR_ORDER = ['year', 'month', 'day', 'hour']
+
+GENERATING_CYCLE = {
+    'Wood': 'Fire', 'Fire': 'Earth', 'Earth': 'Metal', 'Metal': 'Water', 'Water': 'Wood',
+}
+
+# stem pair -> resulting element (天干五合)
+STEM_COMBINATIONS = {
+    frozenset(('甲', '己')): 'Earth',
+    frozenset(('乙', '庚')): 'Metal',
+    frozenset(('丙', '辛')): 'Water',
+    frozenset(('丁', '壬')): 'Wood',
+    frozenset(('戊', '癸')): 'Fire',
+}
 
 SIX_CLASHES = [
     ('子', '午'), ('丑', '未'), ('寅', '申'),
@@ -120,5 +135,53 @@ def find_branch_interactions(pillars):
     for a, b in SIX_BREAKS:
         if a in present and b in present:
             add("break", (a, b))
+
+    return results
+
+
+def find_stem_combinations(pillars):
+    """Detects Heavenly Stem combinations (天干五合) between ADJACENT
+    pillars' stems (Year-Month, Month-Day, Day-Hour) - per the RAG doc's
+    practical note, a stem combination between non-adjacent pillars is a
+    much weaker, often-ignored effect, so it's deliberately not flagged here.
+
+    Each result includes "involves_day_master" (traditionally the most
+    significant case - see stem_combinations.md) and a
+    "season_supports_transformation" heuristic: whether the Month branch's
+    own element matches or is generated toward the combination's resulting
+    element. This is only ONE of the traditional conditions for true
+    transformation (合化) vs. a structural-only combination (合而不化) - it
+    does not check whether the resulting element is opposed elsewhere in
+    the chart, so treat it as a signal to weigh, not a verdict."""
+    stems = {}
+    for key in PILLAR_ORDER:
+        pillar = pillars.get(key)
+        if pillar and len(pillar) >= 1:
+            stems[key] = pillar[0]
+
+    month_branch = pillars.get('month', '')
+    month_element = None
+    if month_branch and len(month_branch) >= 2:
+        month_element = STEM_ATTRIBUTES.get(month_branch[1], {}).get('element')
+
+    results = []
+    for a, b in zip(PILLAR_ORDER, PILLAR_ORDER[1:]):
+        if a not in stems or b not in stems:
+            continue
+        pair_key = frozenset((stems[a], stems[b]))
+        if pair_key not in STEM_COMBINATIONS:
+            continue
+        element = STEM_COMBINATIONS[pair_key]
+        season_supports = month_element is not None and (
+            month_element == element or GENERATING_CYCLE.get(month_element) == element
+        )
+        results.append({
+            "type": "stem_combination",
+            "stems": [stems[a], stems[b]],
+            "positions": [a, b],
+            "element": element,
+            "involves_day_master": "day" in (a, b),
+            "season_supports_transformation": season_supports,
+        })
 
     return results
