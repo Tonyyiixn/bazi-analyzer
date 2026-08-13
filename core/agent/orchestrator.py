@@ -55,12 +55,18 @@ exact pillar, Ten God relationship to the Day Master, how its branch \
 interacts with the natal branches, and whether its stem combines with the \
 Day Master - never invent a year's stem/branch or its effects yourself.
 
-You also have a search_bazi_principles tool over a small curated library of \
-traditional interpretive principles. Call it before making interpretive claims \
-(what a Ten God, element imbalance, clash, or Da Yun period "means") so your \
-reading is grounded in that reference material rather than invented from \
-general knowledge. That library is a draft starter set pending human expert \
-review - use it as a helpful reference, not infallible scripture."""
+You also have two tools over a small curated library of traditional \
+interpretive principles. Once you have a chart's pillars, prefer \
+search_principles_for_chart(pillars) - it builds its search query from the \
+chart's actual computed Ten Gods, strength, and interactions, so it can't \
+miss a doc due to wording mismatch the way a free-text query can. Use \
+search_bazi_principles(query) instead for questions not tied to a specific \
+chart's features (e.g. general Da Yun timing theory). Call one of them before \
+making interpretive claims (what a Ten God, element imbalance, clash, or Da \
+Yun period "means") so your reading is grounded in that reference material \
+rather than invented from general knowledge. That library is a draft starter \
+set pending human expert review - use it as a helpful reference, not \
+infallible scripture."""
 
 
 def _skill_menu() -> str:
