@@ -18,6 +18,19 @@ const getElementColor = (char) => {
   return 'text-parchment-200'; // Default fallback
 };
 
+// Maps an English element name (as used in elements/favorable_elements/etc)
+// to the same palette as getElementColor, for chips that aren't a single
+// Chinese character.
+const elementNameColor = (name) => {
+  const map = { Wood: 'text-el-wood', Fire: 'text-el-fire', Earth: 'text-el-earth', Metal: 'text-el-metal', Water: 'text-el-water' };
+  return map[name] || 'text-parchment-200';
+};
+
+const INTERACTION_LABELS = {
+  clash: 'Clash', combination: 'Combination', three_harmony: 'Three Harmony',
+  punishment: 'Punishment', harm: 'Harm', break: 'Break',
+};
+
 export default function Results() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -147,6 +160,87 @@ export default function Results() {
             ))}
           </div>
         </div>
+
+        {/* 4. Day Master Strength */}
+        {chartData.day_master_strength && (
+          <div className="pt-6 border-t border-ink-700 mt-6">
+            <h3 className="text-xs font-semibold text-parchment-600 uppercase tracking-widest mb-4 text-center">
+              Day Master Strength <span className="normal-case font-normal">(via {chartData.day_master_strength.method})</span>
+            </h3>
+            <div className="flex flex-col items-center gap-3">
+              <span className={`px-4 py-1.5 rounded-full text-sm font-semibold border ${
+                chartData.day_master_strength.strength === 'strong' ? 'border-el-fire text-el-fire' :
+                chartData.day_master_strength.strength === 'weak' ? 'border-el-water text-el-water' :
+                'border-parchment-400 text-parchment-400'
+              }`}>
+                {chartData.day_master_strength.strength.toUpperCase()} ({chartData.day_master_strength.support_weight} support / {chartData.day_master_strength.drain_weight} drain)
+              </span>
+              {chartData.day_master_strength.favorable_elements.length > 0 && (
+                <div className="flex flex-wrap justify-center items-center gap-x-2 gap-y-1 text-xs">
+                  <span className="text-parchment-600">Favorable:</span>
+                  {chartData.day_master_strength.favorable_elements.map((el) => (
+                    <span key={el} className={`font-semibold ${elementNameColor(el)}`}>{el}</span>
+                  ))}
+                  <span className="text-parchment-600 ml-3">Unfavorable:</span>
+                  {chartData.day_master_strength.unfavorable_elements.map((el) => (
+                    <span key={el} className="font-semibold text-parchment-600">{el}</span>
+                  ))}
+                </div>
+              )}
+              {chartData.day_master_strength.note && (
+                <p className="text-xs text-parchment-600 text-center max-w-md italic">{chartData.day_master_strength.note}</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 5. Branch Interactions */}
+        {chartData.branch_interactions && (
+          <div className="pt-6 border-t border-ink-700 mt-6">
+            <h3 className="text-xs font-semibold text-parchment-600 uppercase tracking-widest mb-4 text-center">Branch Interactions</h3>
+            {chartData.branch_interactions.length === 0 ? (
+              <p className="text-xs text-parchment-600 text-center italic">No active clashes, combinations, or punishments.</p>
+            ) : (
+              <div className="space-y-2 max-w-md mx-auto">
+                {chartData.branch_interactions.map((it, i) => (
+                  <div key={i} className="flex items-center justify-between gap-3 bg-ink-950 border border-ink-700 rounded px-3 py-2 text-sm">
+                    <span className="text-parchment-200">
+                      <span className="text-gold-500 font-semibold">{INTERACTION_LABELS[it.type] || it.type}</span>
+                      {it.note ? ` (${it.note})` : ''}: {it.branches.join(' + ')}
+                      {it.element ? ` → ${it.element}` : ''}
+                    </span>
+                    <span className="text-xs text-parchment-600 whitespace-nowrap">{it.positions.join('/')}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 6. Stem Combinations */}
+        {chartData.stem_combinations && (
+          <div className="pt-6 border-t border-ink-700 mt-6">
+            <h3 className="text-xs font-semibold text-parchment-600 uppercase tracking-widest mb-4 text-center">Stem Combinations</h3>
+            {chartData.stem_combinations.length === 0 ? (
+              <p className="text-xs text-parchment-600 text-center italic">No adjacent stem combinations.</p>
+            ) : (
+              <div className="space-y-1 max-w-md mx-auto">
+                {chartData.stem_combinations.map((c, i) => (
+                  <div key={i} className="bg-ink-950 border border-ink-700 rounded px-3 py-2 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-parchment-200">{c.stems.join(' + ')} → {c.element}</span>
+                      <span className="text-xs text-parchment-600 whitespace-nowrap">{c.positions.join('/')}</span>
+                    </div>
+                    <div className="text-xs text-parchment-600 mt-1">
+                      {c.involves_day_master && <span className="text-gold-500 font-semibold mr-2">Day Master</span>}
+                      {c.season_supports_transformation ? 'Season supports transformation' : 'Season does not support transformation'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
     </div>
       {/* ACTION BUTTONS */}
       <div className="flex flex-col sm:flex-row justify-center gap-4 mb-8">
