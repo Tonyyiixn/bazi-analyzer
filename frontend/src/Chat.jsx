@@ -80,7 +80,15 @@ export default function Chat() {
       formData.city && `City: ${formData.city}`,
     ].filter(Boolean).join(', ');
 
-    const seedMessage = `Here is my already-computed natal chart, no need to recalculate unless I ask about a different date/person:\n${identityLine}\nPillars: ${JSON.stringify(chartData.pillars)}\nTen Gods: ${JSON.stringify(chartData.ten_gods)}\nElements: ${JSON.stringify(chartData.elements)}\nDa Yun: ${JSON.stringify(chartData.da_yuns)}`;
+    // Older saved charts may predate branch_interactions/stem_combinations/
+    // day_master_strength, so only include them when present.
+    const extraFields = [
+      chartData.branch_interactions && `Branch Interactions: ${JSON.stringify(chartData.branch_interactions)}`,
+      chartData.stem_combinations && `Stem Combinations: ${JSON.stringify(chartData.stem_combinations)}`,
+      chartData.day_master_strength && `Day Master Strength: ${JSON.stringify(chartData.day_master_strength)}`,
+    ].filter(Boolean).join('\n');
+
+    const seedMessage = `Here is my already-computed natal chart, no need to recalculate unless I ask about a different date/person:\n${identityLine}\nPillars: ${JSON.stringify(chartData.pillars)}\nTen Gods: ${JSON.stringify(chartData.ten_gods)}\nElements: ${JSON.stringify(chartData.elements)}\nDa Yun: ${JSON.stringify(chartData.da_yuns)}${extraFields ? `\n${extraFields}` : ''}`;
 
     startNewChat();
     sendMessage(seedMessage, null);
