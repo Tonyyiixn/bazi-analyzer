@@ -14,23 +14,6 @@ const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => i);
 const daysInMonth = (year, month) => new Date(year, month, 0).getDate();
 const pad2 = (n) => String(n).padStart(2, '0');
 
-// Helper function to colorize Chinese characters based on their Bazi Element
-const getElementColor = (char) => {
-  const wood = ['甲', '乙', '寅', '卯'];
-  const fire = ['丙', '丁', '巳', '午'];
-  const earth = ['戊', '己', '辰', '戌', '丑', '未'];
-  const metal = ['庚', '辛', '申', '酉'];
-  const water = ['壬', '癸', '亥', '子'];
-
-  if (wood.includes(char)) return 'text-el-wood';
-  if (fire.includes(char)) return 'text-el-fire';
-  if (earth.includes(char)) return 'text-el-earth';
-  if (metal.includes(char)) return 'text-el-metal';
-  if (water.includes(char)) return 'text-el-water';
-
-  return 'text-parchment-200'; // Default fallback
-};
-
 function App() {
   // 1. Form State
   const [formData, setFormData] = useState({
@@ -64,11 +47,7 @@ function App() {
 
   // 2. Network State
   const [isCalculating, setIsCalculating] = useState(false);
-  const [chartData, setChartData] = useState(null);
   const [error, setError] = useState(null);
-
-  // Save chart state
-  const [isSaving, setIsSaving] = useState(false);
 
   // AI Time Test State
   const [showRectifier, setShowRectifier] = useState(false);
@@ -110,7 +89,6 @@ function App() {
     e.preventDefault();
     setIsCalculating(true);
     setError(null);
-    setChartData(null); // Clear old chart if recalculating
 
     try {
       // Send the JSON payload to our Python backend
@@ -129,7 +107,6 @@ function App() {
 
       // Parse the JSON response
       const data = await response.json();
-      //setChartData(data); // Save the pillars and elements into React state!
       navigate ('/results', { state: { chartData: data, formData: formData } }); // Send them to the results page with the data
     } catch (err) {
       setError(err.message);
@@ -168,34 +145,6 @@ function App() {
       setError(err.message);
     } finally {
       setIsRectifying(false);
-    }
-  };
-
-  const handleSaveChart = async () => {
-    setIsSaving(true);
-    try {
-      const response = await fetch("http://127.0.0.1:8000/api/v1/charts/save", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}` // Show the VIP wristband!
-        },
-        body: JSON.stringify({
-          name: formData.name, // The person's name from the input form
-          chart_data: chartData, // The calculated 4 pillars data
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to save the chart.");
-      }
-
-      alert("Chart saved to your Vault.");
-
-    } catch (err) {
-      alert("Error: " + err.message);
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -409,92 +358,6 @@ function App() {
         )}
         {/* --- END AI PANEL --- */}
       </div>
-
-      {/* THE RESULTS DASHBOARD (Only shows if chartData exists) */}
-      {/* THE RESULTS DASHBOARD */}
-      {chartData && (
-        <div className="space-y-8 w-full max-w-4xl">
-
-          {/* MAIN CHART CARD */}
-          <div className="bg-ink-900 border border-ink-700 p-8 rounded">
-            <h2 className="text-xl font-serif-display text-parchment-100 mb-6 text-center">Natal Chart (Four Pillars)</h2>
-
-            {/* 1. The 4 Pillars & Ten Gods */}
-            <div className="grid grid-cols-4 gap-4 mb-8">
-              {['Year', 'Month', 'Day', 'Hour'].map((pillar) => {
-                const pKey = pillar.toLowerCase();
-                return (
-                  <div key={pillar} className="text-center">
-                    <p className="text-xs text-parchment-600 uppercase tracking-widest font-semibold mb-2">{pillar}</p>
-                    <div className="bg-ink-950 border border-ink-700 rounded p-4">
-                      {/* Stem (upper) */}
-                      <div className="flex flex-col items-center">
-                        <span className={`text-3xl font-serif-display ${getElementColor(chartData.pillars[pKey][0])}`}>
-                          {chartData.pillars[pKey][0]}
-                        </span>
-                        <span className="text-xs font-semibold text-gold-500 mt-1">{chartData.ten_gods[pKey].stem}</span>
-                      </div>
-                      {/* Branch (lower) */}
-                      <div className="flex flex-col items-center mt-2 pt-2 border-t border-ink-700">
-                        <span className={`text-3xl font-serif-display ${getElementColor(chartData.pillars[pKey][1])}`}>
-                          {chartData.pillars[pKey][1]}
-                        </span>
-                        <span className="text-xs font-semibold text-jade-500 mt-1">{chartData.ten_gods[pKey].branch}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* 2. Elemental Progress Bars */}
-            <h3 className="text-xs font-semibold text-parchment-600 uppercase tracking-widest mb-4 text-center">Element Strength</h3>
-            <div className="grid grid-cols-5 gap-2 mb-8">
-              {Object.entries(chartData.elements).map(([el, val]) => (
-                <div key={el} className="text-center">
-                  <div className="h-24 bg-ink-950 border border-ink-700 rounded relative overflow-hidden flex flex-col justify-end">
-                    <div
-                      className={`w-full transition-all duration-700 ${el === 'Wood' ? 'bg-el-wood' : el === 'Fire' ? 'bg-el-fire' : el === 'Earth' ? 'bg-el-earth' : el === 'Metal' ? 'bg-el-metal' : 'bg-el-water'}`}
-                      style={{ height: `${(val / 8) * 100}%` }}
-                    ></div>
-                  </div>
-                  <p className="text-xs font-semibold mt-2 text-parchment-400">{el} ({val})</p>
-                </div>
-              ))}
-            </div>
-
-            {/* 3. The Da Yun (10-Year Luck Pillars) */}
-            <div className="pt-6 border-t border-ink-700">
-              <h3 className="text-xs font-semibold text-parchment-600 uppercase tracking-widest mb-4 text-center">10-Year Luck Pillars (Da Yun)</h3>
-              <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
-                {chartData.da_yuns.map((yun, index) => (
-                  <div key={index} className="bg-ink-950 border border-ink-700 rounded p-2 text-center hover:border-gold-500 transition cursor-default">
-                    <p className="text-xs font-semibold text-parchment-400 mb-1">{yun.start_age}y</p>
-                    <p className="text-[10px] text-parchment-600 mb-1">{yun.start_year}</p>
-                    <p className="text-base font-serif-display text-parchment-200">{yun.pillar}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* THE SAVE BUTTON */}
-          <div className="flex justify-center mt-6">
-            <button
-              onClick={handleSaveChart}
-              disabled={isSaving}
-              className={`px-8 py-3 rounded font-semibold transition flex items-center gap-2 ${
-                isSaving
-                  ? 'bg-ink-700 cursor-not-allowed text-parchment-600'
-                  : 'bg-jade-500 text-ink-950 hover:bg-jade-400'
-              }`}
-            >
-              {isSaving ? 'Saving...' : 'Save Chart to Profile'}
-            </button>
-          </div>
-        </div>
-      )}
-            {/* (The title, the input form, the chartData cards, the Gemini AI button, etc.) */}
 
           </div>
         } />
