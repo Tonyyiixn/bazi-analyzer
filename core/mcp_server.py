@@ -11,6 +11,7 @@ from core.bazi_math import calculate_bazi_chart, get_element_counts, calculate_c
 from core.bazi_interactions import find_branch_interactions, find_stem_combinations, analyze_liu_nian
 from core.bazi_strength import analyze_day_master_strength
 from core.rag import get_index
+from core.feature_query import build_principle_query
 
 mcp = FastMCP("bazi-engine")
 
@@ -180,6 +181,30 @@ def search_bazi_principles(query: str) -> dict:
     library is relevant to the query - in that case, answer from general
     Bazi knowledge instead."""
     return {"results": get_index().search(query, k=3)}
+
+
+@mcp.tool()
+def search_principles_for_chart(pillars: dict) -> dict:
+    """Retrieve principle passages using a query built automatically from a
+    chart's actual computed features (Ten Gods, Day Master strength, branch
+    interactions, stem combinations) - instead of a free-text query you have
+    to word yourself. Prefer this over search_bazi_principles once you have
+    a chart's pillars, since it can't miss relevant docs due to a wording
+    mismatch (e.g. searching "wealthy" instead of "Wealth star"). `pillars`
+    must have "year"/"month"/"day"/"hour" keys, each a 2-character
+    stem+branch string, as returned by calculate_full_chart.
+
+    Returns up to 5 relevant principle documents (topic + full markdown)
+    plus the derived "query" string for transparency, and an empty list if
+    nothing in the library matches this chart's specific features. Still use
+    search_bazi_principles for questions not tied to this chart's features
+    (e.g. general Da Yun timing theory)."""
+    ten_gods = calculate_chart_ten_gods(pillars)
+    branch_interactions = find_branch_interactions(pillars)
+    stem_combinations = find_stem_combinations(pillars)
+    day_master_strength = analyze_day_master_strength(pillars)
+    query = build_principle_query(ten_gods, branch_interactions, stem_combinations, day_master_strength)
+    return {"query": query, "results": get_index().search(query, k=5)}
 
 
 if __name__ == "__main__":
