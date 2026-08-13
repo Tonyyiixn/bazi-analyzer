@@ -9,6 +9,7 @@ from mcp.server.fastmcp import FastMCP
 from core.time_engine import get_true_solar_time
 from core.bazi_math import calculate_bazi_chart, get_element_counts, calculate_chart_ten_gods
 from core.bazi_interactions import find_branch_interactions, find_stem_combinations, analyze_liu_nian
+from core.bazi_strength import analyze_day_master_strength
 from core.rag import get_index
 
 mcp = FastMCP("bazi-engine")
@@ -23,8 +24,9 @@ def calculate_full_chart(year: int, month: int, day: int, hour: int, minute: int
     Gods (Shishen) for each pillar's stem AND branch (via the branch's dominant
     hidden stem) relative to the Day Master, every active branch interaction
     (clashes/combinations/three-harmonies/punishments/harms/breaks) between
-    the four natal branches, and every adjacent-pillar Heavenly Stem
-    combination (天干五合). Use this for any question about a specific
+    the four natal branches, every adjacent-pillar Heavenly Stem combination
+    (天干五合), and Day Master strength (身強/身弱) with favorable/unfavorable
+    elements via the 扶抑 method. Use this for any question about a specific
     person's chart - it's the fastest way to get everything needed for a
     reading in one call.
 
@@ -38,6 +40,7 @@ def calculate_full_chart(year: int, month: int, day: int, hour: int, minute: int
     ten_gods = calculate_chart_ten_gods(pillars)
     branch_interactions = find_branch_interactions(pillars)
     stem_combinations = find_stem_combinations(pillars)
+    day_master_strength = analyze_day_master_strength(pillars)
 
     return {
         "pillars": pillars,
@@ -46,6 +49,7 @@ def calculate_full_chart(year: int, month: int, day: int, hour: int, minute: int
         "ten_gods": ten_gods,
         "branch_interactions": branch_interactions,
         "stem_combinations": stem_combinations,
+        "day_master_strength": day_master_strength,
         "true_solar_time": {
             "year": adj_year, "month": adj_month, "day": adj_day,
             "hour": adj_hour, "minute": adj_minute,
@@ -132,6 +136,30 @@ def get_liu_nian(pillars: dict, year: int) -> dict:
       exists at all" for other stems, since only the Day Master pairing is
       checked here."""
     return analyze_liu_nian(pillars, year)
+
+
+@mcp.tool()
+def get_day_master_strength(pillars: dict) -> dict:
+    """Score Day Master strength (身強/身弱) and derive favorable/unfavorable
+    elements using the 扶抑 (Support/Suppress) method. `pillars` must have
+    "year"/"month"/"day"/"hour" keys, each a 2-character stem+branch string,
+    as returned by calculate_full_chart.
+
+    IMPORTANT CAVEAT: 扶抑 is one of several traditional methods for
+    selecting favorable elements (others: 調候/通關/病藥) and can disagree
+    with them on the same chart - this app implements 扶抑 only, as a
+    documented default, not an uncontested truth. Present "favorable_
+    elements"/"unfavorable_elements" as this method's read, not an absolute
+    fact.
+
+    Returns "strength" ("strong"/"weak"/"balanced"), "support_weight" vs
+    "drain_weight", a "factors" breakdown (every non-Day-Master character's
+    Ten God, category, and weight - use this to explain WHY the verdict
+    came out this way, e.g. "your Month branch selfishly weighs double"),
+    and the resulting favorable/unfavorable elements. When "strength" is
+    "balanced", both element lists are empty and "note" explains why - do
+    not force a favorable-element claim in that case."""
+    return analyze_day_master_strength(pillars)
 
 
 @mcp.tool()
