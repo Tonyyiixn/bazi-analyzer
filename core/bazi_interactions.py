@@ -8,7 +8,9 @@ stem_combinations.md) so a computed answer here never contradicts what
 search_bazi_principles retrieves.
 """
 
-from core.bazi_math import STEM_ATTRIBUTES, BRANCH_MAIN_QI, get_ten_god, get_year_pillar
+from datetime import date
+
+from core.bazi_math import STEM_ATTRIBUTES, BRANCH_MAIN_QI, get_ten_god, get_year_pillar, get_month_pillar
 
 PILLAR_ORDER = ['year', 'month', 'day', 'hour']
 
@@ -243,4 +245,80 @@ def analyze_liu_nian(pillars, year):
         "ten_gods": ten_gods,
         "branch_interactions": branch_interactions,
         "stem_combination_with_day_master": stem_combination_with_day_master,
+    }
+
+
+LIU_YUE_PILLAR_ORDER = LIU_NIAN_PILLAR_ORDER + ['liu_yue']
+
+
+def analyze_liu_yue(pillars, year, month, day):
+    """Analyzes how a given month's Liu Yue (流月, monthly pillar) interacts
+    with a natal chart - same shape as analyze_liu_nian, but for the month
+    layer. Also computes that month's containing Liu Nian (annual pillar)
+    and includes it in the interaction scan, since a month is traditionally
+    read together with its year, not in isolation - a Liu Yue clash against
+    the Liu Nian pillar itself is as meaningful as one against a natal
+    branch. `day` matters (not just year/month): Bazi months are bounded by
+    solar terms, not the 1st of the Gregorian month - see get_month_pillar.
+
+    Returns {"year", "month", "liu_nian_pillar", "pillar", "ten_gods",
+    "branch_interactions", "stem_combination_with_day_master"} -
+    "branch_interactions" includes interactions against BOTH the natal
+    branches and the Liu Nian branch."""
+    liu_nian_pillar = get_year_pillar(year)
+    liu_yue_pillar = get_month_pillar(year, month, day)
+    stem, branch = liu_yue_pillar[0], liu_yue_pillar[1]
+    day_master = pillars['day'][0]
+
+    ten_gods = {
+        'stem': get_ten_god(day_master, stem),
+        'branch': get_ten_god(day_master, BRANCH_MAIN_QI[branch]),
+    }
+
+    extended_pillars = {**pillars, 'liu_nian': liu_nian_pillar, 'liu_yue': liu_yue_pillar}
+    all_interactions = find_branch_interactions(extended_pillars, pillar_order=LIU_YUE_PILLAR_ORDER)
+    branch_interactions = [i for i in all_interactions if 'liu_yue' in i['positions']]
+
+    stem_combination_with_day_master = None
+    pair_key = frozenset((stem, day_master))
+    if pair_key in STEM_COMBINATIONS:
+        element = STEM_COMBINATIONS[pair_key]
+        month_branch = pillars.get('month', '')
+        month_element = (
+            STEM_ATTRIBUTES.get(month_branch[1], {}).get('element')
+            if len(month_branch) >= 2 else None
+        )
+        season_supports = month_element is not None and (
+            month_element == element or GENERATING_CYCLE.get(month_element) == element
+        )
+        stem_combination_with_day_master = {
+            "stems": [stem, day_master],
+            "element": element,
+            "season_supports_transformation": season_supports,
+        }
+
+    return {
+        "year": year,
+        "month": month,
+        "liu_nian_pillar": liu_nian_pillar,
+        "pillar": liu_yue_pillar,
+        "ten_gods": ten_gods,
+        "branch_interactions": branch_interactions,
+        "stem_combination_with_day_master": stem_combination_with_day_master,
+    }
+
+
+def get_current_period(pillars):
+    """Convenience wrapper: analyzes TODAY's Liu Nian and Liu Yue together
+    against a natal chart, using the server's current date - so callers
+    (the agent, the REST layer) never have to pass or guess today's
+    year/month/day themselves. Always computed fresh at call time, never
+    cached, so it can't go stale across a long-running process or a chart
+    viewed long after it was saved.
+
+    Returns {"liu_nian": <analyze_liu_nian result>, "liu_yue": <analyze_liu_yue result>}."""
+    today = date.today()
+    return {
+        "liu_nian": analyze_liu_nian(pillars, today.year),
+        "liu_yue": analyze_liu_yue(pillars, today.year, today.month, today.day),
     }
