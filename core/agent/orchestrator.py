@@ -17,6 +17,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from core.consistency_gate import check_consistency
+from core.guardrails import build_guardrail_instructions, check_guardrail_compliance, detect_categories
 from core.skills.registry import SKILLS, DEFAULT_SKILL_ID
 
 logger = logging.getLogger(__name__)
@@ -148,6 +149,13 @@ class BaziAgent:
         # system prompt if prompt caching is ever added later.
         system += f"\n\nToday's date is {date.today().isoformat()}."
 
+        # High-stakes question guardrail: cheap keyword scan of the newest
+        # user message only (not the whole history) so old messages can't
+        # keep re-triggering safety instructions turn after turn.
+        latest_user_text = messages[-1]["content"] if messages and messages[-1]["role"] == "user" else ""
+        guardrail_categories = detect_categories(latest_user_text) if isinstance(latest_user_text, str) else []
+        system += build_guardrail_instructions(guardrail_categories)
+
         convo = list(messages)
         facts: dict = {}
 
@@ -170,7 +178,16 @@ class BaziAgent:
                 warnings = check_consistency(text, facts)
                 if warnings:
                     logger.warning("Consistency gate flagged reply: %s", warnings)
-                return {"reply": text, "skill_used": skill.id, "consistency_warnings": warnings}
+                guardrail_warnings = check_guardrail_compliance(text, guardrail_categories)
+                if guardrail_warnings:
+                    logger.warning("Guardrail compliance check flagged reply: %s", guardrail_warnings)
+                return {
+                    "reply": text,
+                    "skill_used": skill.id,
+                    "consistency_warnings": warnings,
+                    "guardrail_categories": guardrail_categories,
+                    "guardrail_warnings": guardrail_warnings,
+                }
 
             convo.append({"role": "assistant", "content": response.content})
 
@@ -189,4 +206,6 @@ class BaziAgent:
             "reply": "I wasn't able to finish that within the allotted tool calls - try narrowing your question.",
             "skill_used": skill.id,
             "consistency_warnings": [],
+            "guardrail_categories": guardrail_categories,
+            "guardrail_warnings": [],
         }
