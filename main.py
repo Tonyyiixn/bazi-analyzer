@@ -8,13 +8,13 @@ from sqlalchemy.orm import Session
 # --- IMPORT OUR EXISTING ENGINES ---
 from core.time_engine import get_true_solar_time
 from core.bazi_math import calculate_bazi_chart, get_element_counts ,calculate_chart_ten_gods
-from core.bazi_interactions import find_branch_interactions, find_stem_combinations
+from core.bazi_interactions import find_branch_interactions, find_stem_combinations, get_current_period
 from core.bazi_strength import analyze_day_master_strength
 from core.ai_engine import rectify_birth_hour
 from core.agent.orchestrator import BaziAgent
 from core.skills.registry import SKILLS, DEFAULT_SKILL_ID
 
-from core.schemas import BaziRequest, UserCreate, UserResponse, Token, UserLogin, TimeTestAnswers, ChatRequest
+from core.schemas import BaziRequest, UserCreate, UserResponse, Token, UserLogin, TimeTestAnswers, ChatRequest, PillarsRequest
 from core import models, security, schemas
 from core.database import engine, get_db
 
@@ -138,6 +138,21 @@ def calculate_bazi(request: BaziRequest,
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Calculation Error: {str(e)}")
+
+
+@app.post("/api/v1/current-period")
+def current_period(request: PillarsRequest,
+                    current_user: models.User = Depends(security.get_current_user)):
+    """Today's Liu Nian/Liu Yue against a natal chart. Deliberately NOT part
+    of /calculate's response or the saved chart_data blob - it's a live,
+    moving fact (today's date), not a static property of the chart, so
+    callers should always fetch it fresh (e.g. on every page load) instead
+    of trusting a persisted copy that would go stale the day after it was
+    saved."""
+    try:
+        return {"success": True, **get_current_period(request.pillars)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Current Period Error: {str(e)}")
 
 
 @app.post("/api/v1/rectify-time")

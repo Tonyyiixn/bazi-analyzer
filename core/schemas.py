@@ -34,6 +34,12 @@ class UserLogin(BaseModel):
     email: str
     password: str
 
+class PillarsRequest(BaseModel):
+    """Just a natal chart's pillars - used by endpoints that derive live,
+    time-dependent facts (e.g. current Liu Nian/Liu Yue) from an already-
+    computed chart without recalculating the whole thing."""
+    pillars: dict[str, str]
+
 class ChartCreate(BaseModel):
     name: str
     chart_data: dict
