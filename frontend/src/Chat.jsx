@@ -86,6 +86,7 @@ export default function Chat() {
       chartData.branch_interactions && `Branch Interactions: ${JSON.stringify(chartData.branch_interactions)}`,
       chartData.stem_combinations && `Stem Combinations: ${JSON.stringify(chartData.stem_combinations)}`,
       chartData.day_master_strength && `Day Master Strength: ${JSON.stringify(chartData.day_master_strength)}`,
+      chartData.current_period && `Current Period (Liu Nian/Liu Yue, already computed for today - no need to call get_current_period again unless asked about a different year/month): ${JSON.stringify(chartData.current_period)}`,
     ].filter(Boolean).join('\n');
 
     const seedMessage = `Here is my already-computed natal chart, no need to recalculate unless I ask about a different date/person:\n${identityLine}\nPillars: ${JSON.stringify(chartData.pillars)}\nTen Gods: ${JSON.stringify(chartData.ten_gods)}\nElements: ${JSON.stringify(chartData.elements)}\nDa Yun: ${JSON.stringify(chartData.da_yuns)}${extraFields ? `\n${extraFields}` : ''}`;

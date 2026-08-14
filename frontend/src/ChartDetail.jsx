@@ -38,6 +38,25 @@ export default function ChartDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Today's Liu Nian/Liu Yue - always fetched fresh against this chart's
+  // pillars, never trusted from the saved chart_data blob, since it's a
+  // moving fact that would go stale the day after the chart was saved.
+  const [currentPeriod, setCurrentPeriod] = useState(null);
+
+  useEffect(() => {
+    const pillars = chartRecord?.chart_data?.pillars;
+    if (!pillars) return;
+    const token = localStorage.getItem('bazi_token');
+    fetch("http://127.0.0.1:8000/api/v1/current-period", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ pillars }),
+    })
+      .then((res) => res.json())
+      .then((data) => { if (data.success) setCurrentPeriod({ liu_nian: data.liu_nian, liu_yue: data.liu_yue }); })
+      .catch(() => {});
+  }, [chartRecord]);
+
   useEffect(() => {
     const fetchChart = async () => {
       const token = localStorage.getItem('bazi_token');
@@ -206,12 +225,84 @@ export default function ChartDetail() {
             )}
           </div>
         )}
+
+        {/* 6. Current Period - Liu Nian & Liu Yue (fetched live, always today) */}
+        {currentPeriod && (
+          <div className="pt-6 border-t border-ink-700 mt-6">
+            <h3 className="text-xs font-semibold text-parchment-600 uppercase tracking-widest mb-4 text-center">
+              Current Period — Liu Nian &amp; Liu Yue
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
+              <div className="bg-ink-950 border border-ink-700 rounded p-4 text-center">
+                <p className="text-xs text-parchment-600 uppercase tracking-widest font-semibold mb-2">
+                  Liu Nian ({currentPeriod.liu_nian.year})
+                </p>
+                <div className="flex justify-center gap-1 mb-2">
+                  {String(currentPeriod.liu_nian.pillar).split('').map((char, i) => (
+                    <span key={i} className={`text-2xl font-serif-display ${getElementColor(char)}`}>{char}</span>
+                  ))}
+                </div>
+                <p className="text-xs text-gold-500 font-semibold mb-2">
+                  {currentPeriod.liu_nian.ten_gods.stem} / {currentPeriod.liu_nian.ten_gods.branch}
+                </p>
+                {currentPeriod.liu_nian.branch_interactions.length === 0 ? (
+                  <p className="text-xs text-parchment-600 italic">No active interactions with the natal chart.</p>
+                ) : (
+                  <div className="space-y-1 text-left">
+                    {currentPeriod.liu_nian.branch_interactions.map((it, i) => (
+                      <p key={i} className="text-xs text-parchment-200">
+                        <span className="text-gold-500 font-semibold">{INTERACTION_LABELS[it.type] || it.type}</span>
+                        {it.note ? ` (${it.note})` : ''}: {it.branches.join(' + ')}{it.element ? ` → ${it.element}` : ''}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-ink-950 border border-ink-700 rounded p-4 text-center">
+                <p className="text-xs text-parchment-600 uppercase tracking-widest font-semibold mb-2">
+                  Liu Yue ({currentPeriod.liu_yue.year}/{currentPeriod.liu_yue.month})
+                </p>
+                <div className="flex justify-center gap-1 mb-2">
+                  {String(currentPeriod.liu_yue.pillar).split('').map((char, i) => (
+                    <span key={i} className={`text-2xl font-serif-display ${getElementColor(char)}`}>{char}</span>
+                  ))}
+                </div>
+                <p className="text-xs text-gold-500 font-semibold mb-2">
+                  {currentPeriod.liu_yue.ten_gods.stem} / {currentPeriod.liu_yue.ten_gods.branch}
+                </p>
+                {currentPeriod.liu_yue.branch_interactions.length === 0 ? (
+                  <p className="text-xs text-parchment-600 italic">No active interactions with the natal chart or Liu Nian.</p>
+                ) : (
+                  <div className="space-y-1 text-left">
+                    {currentPeriod.liu_yue.branch_interactions.map((it, i) => (
+                      <p key={i} className="text-xs text-parchment-200">
+                        <span className="text-gold-500 font-semibold">{INTERACTION_LABELS[it.type] || it.type}</span>
+                        {it.note ? ` (${it.note})` : ''}: {it.branches.join(' + ')}{it.element ? ` → ${it.element}` : ''}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {currentPeriod.liu_yue.stem_combination_with_day_master && (
+                  <p className="text-xs text-jade-400 mt-2">
+                    Stem combines with Day Master → {currentPeriod.liu_yue.stem_combination_with_day_master.element}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* AGENT NAVIGATION */}
       <div className="flex justify-center mt-8 mb-8">
         <button
-          onClick={() => navigate('/chat', { state: { chartData, formData: { name } } })}
+          onClick={() => navigate('/chat', {
+            state: {
+              chartData: currentPeriod ? { ...chartData, current_period: currentPeriod } : chartData,
+              formData: { name },
+            },
+          })}
           className="px-8 py-3 rounded font-semibold transition flex items-center justify-center gap-2 bg-gold-500 text-ink-950 hover:bg-gold-400"
         >
           Discuss with the Agent
