@@ -8,7 +8,10 @@ from mcp.server.fastmcp import FastMCP
 
 from core.time_engine import get_true_solar_time
 from core.bazi_math import calculate_bazi_chart, get_element_counts, calculate_chart_ten_gods
-from core.bazi_interactions import find_branch_interactions, find_stem_combinations, analyze_liu_nian
+from core.bazi_interactions import (
+    find_branch_interactions, find_stem_combinations, analyze_liu_nian, analyze_liu_yue,
+    get_current_period as compute_current_period,
+)
 from core.bazi_strength import analyze_day_master_strength
 from core.rag import get_index
 from core.feature_query import build_principle_query
@@ -137,6 +140,47 @@ def get_liu_nian(pillars: dict, year: int) -> dict:
       exists at all" for other stems, since only the Day Master pairing is
       checked here."""
     return analyze_liu_nian(pillars, year)
+
+
+@mcp.tool()
+def get_liu_yue(pillars: dict, year: int, month: int, day: int) -> dict:
+    """Compute the Liu Yue (流月, monthly pillar) for a specific date and how
+    it interacts with a natal chart AND that date's own Liu Nian (annual
+    pillar) - use this for "this month"/"next month"/specific-month
+    questions. `pillars` must have "year"/"month"/"day"/"hour" keys, each a
+    2-character stem+branch string, as returned by calculate_full_chart.
+    `year`/`month`/`day` must be a real calendar date - Bazi months are
+    bounded by solar terms, not the 1st of the Gregorian month, so the exact
+    day matters, not just the month number. Check your instructions for
+    today's date rather than guessing.
+
+    Prefer get_current_period if the question is just about "right now" -
+    it computes this for today's actual date automatically.
+
+    Returns "year", "month", "liu_nian_pillar" (that date's annual pillar,
+    for context), "pillar" (the month's own GanZhi), "ten_gods" (relative to
+    the Day Master), "branch_interactions" (against BOTH the natal branches
+    AND the Liu Nian branch - a month is traditionally read together with
+    its year, not in isolation), and "stem_combination_with_day_master"
+    (null unless the month's stem specifically pairs with the Day Master)."""
+    return analyze_liu_yue(pillars, year, month, day)
+
+
+@mcp.tool()
+def get_current_period(pillars: dict) -> dict:
+    """Compute TODAY's Liu Nian (annual pillar) and Liu Yue (monthly pillar)
+    together against a natal chart, using the real current date - no need to
+    pass or guess today's year/month/day. Call this alongside
+    calculate_full_chart for any general or "right now" reading so the
+    current year AND month's influence are part of the picture by default,
+    not just when the user explicitly asks "what about this year/month".
+    `pillars` must have "year"/"month"/"day"/"hour" keys, each a
+    2-character stem+branch string, as returned by calculate_full_chart.
+
+    Returns {"liu_nian": <same shape as get_liu_nian>, "liu_yue": <same
+    shape as get_liu_yue>}. Use get_liu_nian/get_liu_yue instead for a
+    specific past/future year or month the user names."""
+    return compute_current_period(pillars)
 
 
 @mcp.tool()
