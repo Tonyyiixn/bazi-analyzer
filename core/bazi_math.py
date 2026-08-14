@@ -12,6 +12,17 @@ def get_year_pillar(year):
     solar_date = Solar.fromYmdHms(year, 6, 15, 12, 0, 0)
     return solar_date.getLunar().getEightChar().getYear()
 
+def get_month_pillar(year, month, day):
+    """Returns the Liu Yue (流月, monthly pillar) GanZhi for a specific
+    calendar date, e.g. get_month_pillar(2026, 8, 14) -> "乙申".
+
+    Unlike get_year_pillar, this needs the actual day, not just year+month:
+    Bazi months are bounded by solar terms (節氣), not the 1st of the
+    Gregorian month, so a different day within the same Gregorian month can
+    fall on the other side of that boundary and return a different GanZhi."""
+    solar_date = Solar.fromYmdHms(year, month, day, 12, 0, 0)
+    return solar_date.getLunar().getEightChar().getMonth()
+
 def calculate_bazi_chart(year, month, day, hour, minute, gender_input):
     """Calculates the Four Pillars and Da Yun based on precise solar time."""
     solar_date = Solar.fromYmdHms(year, month, day, hour, minute, 0)
