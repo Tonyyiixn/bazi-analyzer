@@ -19,6 +19,7 @@ from core.bazi_math import (
     get_ten_god,
     calculate_chart_ten_gods,
     get_year_pillar,
+    get_month_pillar,
     STEM_ATTRIBUTES,
     BRANCH_MAIN_QI,
 )
@@ -58,6 +59,34 @@ def test_year_pillar_cycles_every_60_years():
     base_pillars, _ = calculate_bazi_chart(1990, 6, 15, 12, 0, "Male")
     shifted_pillars, _ = calculate_bazi_chart(1990 + 60, 6, 15, 12, 0, "Male")
     assert base_pillars["year"] == shifted_pillars["year"]
+
+
+# ---------------------------------------------------------------------------
+# VERIFIED: get_month_pillar() (Liu Yue). Checked against the standard
+# "Five Tigers" rule (五虎遁诀) for deriving a month's stem from its year's
+# stem, which - unlike 用神 selection - is standardized traditional theory:
+#   甲己之年丙作首 乙庚之年戊为头 丙辛之年从庚起 丁壬壬位顺行流 戊癸何方发 甲寅之上好追求
+# 2026's year pillar is 丙午 (year stem 丙), so per "丙辛之年从庚起" the
+# first (寅) month's stem is 庚, incrementing by branch order from there:
+# 寅庚 卯辛 辰壬 巳癸 午甲 未乙 申丙 酉丁 戌戊 亥己 子庚 丑辛.
+# 立秋 (start of the 申 month) falls on 2026-08-07, so Aug 8 is in the 申
+# month -> stem 丙 -> 丙申; Aug 7 is still in the 未 month -> stem 乙 -> 乙未.
+# ---------------------------------------------------------------------------
+
+def test_get_month_pillar_matches_five_tigers_rule_after_liqiu():
+    assert get_month_pillar(2026, 8, 8) == "丙申"
+
+
+def test_get_month_pillar_matches_five_tigers_rule_before_liqiu():
+    assert get_month_pillar(2026, 8, 7) == "乙未"
+
+
+def test_get_month_pillar_is_sensitive_to_solar_term_boundary_not_calendar_month():
+    """Same Gregorian month (August 2026), different Bazi month either side
+    of the 立秋 solar term boundary - this is the whole reason
+    get_month_pillar needs the actual day, unlike get_year_pillar."""
+    assert get_month_pillar(2026, 8, 1) == get_month_pillar(2026, 8, 7)
+    assert get_month_pillar(2026, 8, 7) != get_month_pillar(2026, 8, 8)
 
 
 # ---------------------------------------------------------------------------

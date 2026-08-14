@@ -4,7 +4,11 @@ detection.
 These build synthetic pillar dicts (not full lunar_python charts) so each
 interaction type can be tested in isolation with a precise, minimal example.
 """
-from core.bazi_interactions import find_branch_interactions, find_stem_combinations, analyze_liu_nian
+from datetime import date
+
+from core.bazi_interactions import (
+    find_branch_interactions, find_stem_combinations, analyze_liu_nian, analyze_liu_yue, get_current_period,
+)
 
 
 def _pillars(year, month, day, hour):
@@ -241,3 +245,101 @@ def test_analyze_liu_nian_no_day_master_combination_when_stems_dont_pair():
     pillars = _pillars("丙寅", "戊辰", "甲午", "庚午")
     result = analyze_liu_nian(pillars, 1984)
     assert result["stem_combination_with_day_master"] is None
+
+
+# ---------------------------------------------------------------------------
+# Liu Yue (流月, monthly pillar) analysis
+#
+# Same natal chart as the Liu Nian worked example above (Year=戊午, Month=辛未,
+# Day=己巳, Hour=甲寅, Day Master=己). 2026-08-14 -> Liu Nian 丙午 (verified in
+# test_bazi_math.py's Liu Nian tests), Liu Yue 丙申 (verified in
+# test_bazi_math.py's Five Tigers rule tests). Everything below is hand-worked
+# from those two already-verified pillars plus the same interaction tables
+# tested in isolation above - not just a re-run of the code under test.
+#
+#   - Ten God stem: 己(Yin Earth) vs 丙(Yang Fire) -> Fire generates Earth,
+#     diff polarity -> Direct Resource
+#   - Ten God branch: 申's main qi is 庚(Yang Metal); 己(Yin) vs 庚(Yang) ->
+#     Earth generates Metal, diff polarity -> Hurting Officer
+#   - Stem combination: 丙(Liu Yue) + 己(Day Master) is NOT one of the 5
+#     valid pairs -> None
+#   - Present branches (year/month/day/hour/liu_nian/liu_yue):
+#     午/未/巳/寅/午/申 (午 appears twice - year AND liu_nian)
+#   - Interactions touching liu_yue(申) specifically:
+#     * clash: 寅(hour) vs 申(liu_yue)
+#     * combination: 巳(day) vs 申(liu_yue) -> Water
+#     * punishment (bullying 恃勢之刑): 寅(hour)+巳(day)+申(liu_yue) all present
+#     * break: 巳(day) vs 申(liu_yue)
+#   - Interactions that exist in the full 6-branch set but do NOT touch
+#     liu_yue, and must therefore be filtered OUT: the 午+未 combination,
+#     the partial 寅+午 Fire three-harmony, the 午+午 self-punishment
+#     (year vs liu_nian), and the 寅+巳 harm (hour vs day) - none involve 申.
+# ---------------------------------------------------------------------------
+
+def test_analyze_liu_yue_full_worked_example():
+    pillars = _pillars("戊午", "辛未", "己巳", "甲寅")
+    result = analyze_liu_yue(pillars, 2026, 8, 14)
+
+    assert result["year"] == 2026
+    assert result["month"] == 8
+    assert result["liu_nian_pillar"] == "丙午"
+    assert result["pillar"] == "丙申"
+    assert result["ten_gods"] == {"stem": "Direct Resource", "branch": "Hurting Officer"}
+    assert result["stem_combination_with_day_master"] is None
+
+    interactions = result["branch_interactions"]
+    assert all("liu_yue" in i["positions"] for i in interactions)
+
+    by_type = {i["type"]: i for i in interactions}
+    assert set(by_type) == {"clash", "combination", "punishment", "break"}
+
+    assert set(by_type["clash"]["branches"]) == {"寅", "申"}
+    assert by_type["clash"]["positions"] == ["hour", "liu_yue"]
+
+    assert set(by_type["combination"]["branches"]) == {"巳", "申"}
+    assert by_type["combination"]["element"] == "Water"
+    assert by_type["combination"]["positions"] == ["day", "liu_yue"]
+
+    assert set(by_type["punishment"]["branches"]) == {"寅", "巳", "申"}
+    assert by_type["punishment"]["note"] == "bullying/power (恃勢之刑)"
+    assert by_type["punishment"]["positions"] == ["day", "hour", "liu_yue"]
+
+    assert set(by_type["break"]["branches"]) == {"巳", "申"}
+    assert by_type["break"]["positions"] == ["day", "liu_yue"]
+
+    # The natal-only/liu_nian-only interactions (午+未 combination, partial
+    # 寅+午 three-harmony, 午+午 self-punishment, 寅+巳 harm) must not leak in.
+    assert "three_harmony" not in by_type
+    assert "harm" not in by_type
+
+
+def test_analyze_liu_yue_day_master_stem_combination_detected():
+    # Reuse 2026-08-14's already-verified Liu Yue pillar (丙申, from
+    # test_bazi_math.py's Five Tigers rule tests) but with Day Master 辛
+    # instead of 己 - 丙+辛 is a valid stem combination pair -> Water.
+    pillars = _pillars("戊午", "辛未", "辛巳", "甲寅")  # Day Master 辛
+    result = analyze_liu_yue(pillars, 2026, 8, 14)
+    assert result["pillar"] == "丙申"
+    combo = result["stem_combination_with_day_master"]
+    assert combo is not None
+    assert set(combo["stems"]) == {"丙", "辛"}
+    assert combo["element"] == "Water"
+
+
+# ---------------------------------------------------------------------------
+# get_current_period - thin wrapper around analyze_liu_nian/analyze_liu_yue
+# using today's real date, so it can't go stale. Tested structurally against
+# today's actual date rather than a frozen one, since freezing would just
+# re-test analyze_liu_nian/analyze_liu_yue's own already-covered logic.
+# ---------------------------------------------------------------------------
+
+def test_get_current_period_uses_todays_real_date():
+    pillars = _pillars("戊午", "辛未", "己巳", "甲寅")
+    today = date.today()
+    result = get_current_period(pillars)
+
+    assert result["liu_nian"] == analyze_liu_nian(pillars, today.year)
+    assert result["liu_yue"] == analyze_liu_yue(pillars, today.year, today.month, today.day)
+    assert result["liu_nian"]["year"] == today.year
+    assert result["liu_yue"]["year"] == today.year
+    assert result["liu_yue"]["month"] == today.month
