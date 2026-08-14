@@ -5,6 +5,7 @@ ClientSession open against core/mcp_server.py for the lifetime of the app,
 and runs the Claude tool-use loop against it per chat request.
 """
 import json
+import logging
 import os
 import sys
 from contextlib import AsyncExitStack
@@ -15,7 +16,10 @@ import anthropic
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+from core.consistency_gate import check_consistency
 from core.skills.registry import SKILLS, DEFAULT_SKILL_ID
+
+logger = logging.getLogger(__name__)
 
 MODEL = "claude-haiku-4-5"
 MAX_TOOL_ITERATIONS = 6
@@ -109,6 +113,30 @@ class BaziAgent:
         parts = [block.text for block in result.content if hasattr(block, "text")]
         return "\n".join(parts) if parts else json.dumps(result.model_dump(mode="json"))
 
+    @staticmethod
+    def _merge_tool_facts(name: str, result_text: str, facts: dict) -> None:
+        """Tracks the latest natal-chart facts seen this turn, for the
+        consistency gate to check the final reply against. Last call of
+        each kind wins - fine since a chart's own facts don't change
+        mid-conversation."""
+        try:
+            parsed = json.loads(result_text)
+        except (json.JSONDecodeError, TypeError):
+            return
+        if not isinstance(parsed, dict):
+            return
+
+        if name == "calculate_full_chart":
+            facts["day_master_strength"] = parsed.get("day_master_strength", facts.get("day_master_strength"))
+            facts["branch_interactions"] = parsed.get("branch_interactions", facts.get("branch_interactions"))
+            facts["stem_combinations"] = parsed.get("stem_combinations", facts.get("stem_combinations"))
+        elif name == "get_day_master_strength":
+            facts["day_master_strength"] = parsed
+        elif name == "get_branch_interactions":
+            facts["branch_interactions"] = parsed.get("interactions")
+        elif name == "get_stem_combinations":
+            facts["stem_combinations"] = parsed.get("combinations")
+
     async def run(self, messages: list[dict], skill_id: str | None) -> dict:
         skill = SKILLS.get(skill_id or DEFAULT_SKILL_ID, SKILLS[DEFAULT_SKILL_ID])
         system = BASE_PERSONA + "\n\n" + skill.system_prompt
@@ -121,6 +149,7 @@ class BaziAgent:
         system += f"\n\nToday's date is {date.today().isoformat()}."
 
         convo = list(messages)
+        facts: dict = {}
 
         for _ in range(MAX_TOOL_ITERATIONS):
             response = await self._client.messages.create(
@@ -138,7 +167,10 @@ class BaziAgent:
                         text = "I can't help with that request."
                     elif response.stop_reason == "max_tokens":
                         text = "That answer ran out of room before finishing - try asking again, maybe more narrowly."
-                return {"reply": text, "skill_used": skill.id}
+                warnings = check_consistency(text, facts)
+                if warnings:
+                    logger.warning("Consistency gate flagged reply: %s", warnings)
+                return {"reply": text, "skill_used": skill.id, "consistency_warnings": warnings}
 
             convo.append({"role": "assistant", "content": response.content})
 
@@ -147,6 +179,7 @@ class BaziAgent:
                 if block.type != "tool_use":
                     continue
                 result_text = await self._call_tool(block.name, block.input)
+                self._merge_tool_facts(block.name, result_text, facts)
                 tool_results.append(
                     {"type": "tool_result", "tool_use_id": block.id, "content": result_text}
                 )
@@ -155,4 +188,5 @@ class BaziAgent:
         return {
             "reply": "I wasn't able to finish that within the allotted tool calls - try narrowing your question.",
             "skill_used": skill.id,
+            "consistency_warnings": [],
         }
