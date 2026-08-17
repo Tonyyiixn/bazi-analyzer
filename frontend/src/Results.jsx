@@ -133,6 +133,21 @@ export default function Results() {
                     </span>
                     <span className="text-xs font-semibold text-jade-500 mt-1">{chartData.ten_gods[pKey].branch}</span>
                   </div>
+                  {/* Hidden Stems (藏干) - every stem the branch carries, not just main qi */}
+                  {chartData.hidden_stems?.[pKey]?.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-ink-700 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 items-center">
+                      {chartData.hidden_stems[pKey].map((hs, i) => (
+                        <div key={i} className="contents">
+                          <span className={`font-serif-display text-center ${getElementColor(hs.stem)} ${hs.qi_type === 'main' ? 'text-base' : 'text-sm opacity-60'}`}>
+                            {hs.stem}
+                          </span>
+                          <span className={`text-left leading-tight ${hs.qi_type === 'main' ? 'text-[10px] font-semibold text-parchment-300' : 'text-[10px] text-parchment-600'}`}>
+                            {hs.ten_god}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             );
