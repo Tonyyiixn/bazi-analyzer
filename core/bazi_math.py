@@ -152,6 +152,54 @@ BRANCH_MAIN_QI = {
     '戌': '戊', '亥': '壬',
 }
 
+# Every Earthly Branch's full 藏干 (hidden stems) - not just the dominant
+# 本氣 (main qi) in BRANCH_MAIN_QI above, but also 中氣 (middle qi) and 餘氣
+# (residual qi) where the branch carries more than one. This is standard
+# traditional theory (unlike 用神 selection, this table doesn't vary by
+# school) - the "main" entry for every branch here matches BRANCH_MAIN_QI
+# exactly (cross-checked in tests). Order within each list is main-first.
+#
+# IMPORTANT: day_master_strength (core/bazi_strength.py) deliberately scores
+# ONLY the main qi per branch, per its own documented method - these extra
+# middle/residual stems are additional interpretive color for a Ten God
+# reading, not an input to that strength calculation.
+BRANCH_HIDDEN_STEMS = {
+    '子': [('癸', 'main')],
+    '丑': [('己', 'main'), ('癸', 'middle'), ('辛', 'residual')],
+    '寅': [('甲', 'main'), ('丙', 'middle'), ('戊', 'residual')],
+    '卯': [('乙', 'main')],
+    '辰': [('戊', 'main'), ('乙', 'middle'), ('癸', 'residual')],
+    '巳': [('丙', 'main'), ('庚', 'middle'), ('戊', 'residual')],
+    '午': [('丁', 'main'), ('己', 'middle')],
+    '未': [('己', 'main'), ('丁', 'middle'), ('乙', 'residual')],
+    '申': [('庚', 'main'), ('壬', 'middle'), ('戊', 'residual')],
+    '酉': [('辛', 'main')],
+    '戌': [('戊', 'main'), ('辛', 'middle'), ('丁', 'residual')],
+    '亥': [('壬', 'main'), ('甲', 'middle')],
+}
+
+def get_hidden_stems_ten_gods(day_master, branch):
+    """Every hidden stem (藏干) carried by a branch, each with its Ten God
+    relative to the Day Master and which qi tier it is (main/middle/
+    residual) - richer than calculate_chart_ten_gods's single main-qi-only
+    "branch" Ten God. Returns a list, main qi first."""
+    return [
+        {"stem": stem, "qi_type": qi_type, "ten_god": get_ten_god(day_master, stem)}
+        for stem, qi_type in BRANCH_HIDDEN_STEMS.get(branch, [])
+    ]
+
+def calculate_chart_hidden_stems(pillars):
+    """Every pillar's full hidden-stem breakdown (see
+    get_hidden_stems_ten_gods), keyed by year/month/day/hour."""
+    try:
+        day_master = pillars['day'][0]
+        return {
+            key: get_hidden_stems_ten_gods(day_master, pillars[key][1])
+            for key in ('year', 'month', 'day', 'hour')
+        }
+    except Exception:
+        return {'year': [], 'month': [], 'day': [], 'hour': []}
+
 def calculate_chart_ten_gods(pillars):
     """Calculates the Ten Gods for both the stem and the branch (via its
     dominant hidden stem) of the Year, Month, Day, and Hour pillars,
