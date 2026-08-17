@@ -7,7 +7,9 @@ instead of the backend pre-computing everything itself.
 from mcp.server.fastmcp import FastMCP
 
 from core.time_engine import get_true_solar_time
-from core.bazi_math import calculate_bazi_chart, get_element_counts, calculate_chart_ten_gods
+from core.bazi_math import (
+    calculate_bazi_chart, get_element_counts, calculate_chart_ten_gods, calculate_chart_hidden_stems,
+)
 from core.bazi_interactions import (
     find_branch_interactions, find_stem_combinations, analyze_liu_nian, analyze_liu_yue,
     get_current_period as compute_current_period,
@@ -42,6 +44,7 @@ def calculate_full_chart(year: int, month: int, day: int, hour: int, minute: int
     pillars, da_yuns = calculate_bazi_chart(adj_year, adj_month, adj_day, adj_hour, adj_minute, gender)
     elements = get_element_counts(pillars)
     ten_gods = calculate_chart_ten_gods(pillars)
+    hidden_stems = calculate_chart_hidden_stems(pillars)
     branch_interactions = find_branch_interactions(pillars)
     stem_combinations = find_stem_combinations(pillars)
     day_master_strength = analyze_day_master_strength(pillars)
@@ -51,6 +54,7 @@ def calculate_full_chart(year: int, month: int, day: int, hour: int, minute: int
         "da_yuns": da_yuns,
         "elements": elements,
         "ten_gods": ten_gods,
+        "hidden_stems": hidden_stems,
         "branch_interactions": branch_interactions,
         "stem_combinations": stem_combinations,
         "day_master_strength": day_master_strength,
@@ -77,6 +81,30 @@ def get_ten_gods(pillars: dict) -> dict:
     stem+branch string, as returned by calculate_full_chart. Returns, per
     pillar, {"stem": <Ten God>, "branch": <Ten God>}."""
     return calculate_chart_ten_gods(pillars)
+
+
+@mcp.tool()
+def get_hidden_stems(pillars: dict) -> dict:
+    """Compute every branch's full 藏干 (hidden stems) - not just the single
+    dominant main-qi stem get_ten_gods uses for its "branch" value, but every
+    stem the branch carries (a branch can hold 1-3), each with its own Ten
+    God relative to the Day Master and which qi tier it is ("main"/"middle"/
+    "residual", main-qi first in each list). `pillars` must have
+    "year"/"month"/"day"/"hour" keys, each a 2-character stem+branch string,
+    as returned by calculate_full_chart.
+
+    Use this when the user wants a deeper/more granular reading than the
+    single main-qi Ten God per branch - e.g. "what else is hidden in my
+    Month branch" or a request for a fuller traditional breakdown.
+
+    IMPORTANT CAVEAT: day_master_strength deliberately scores ONLY each
+    branch's main qi (see its own tool description) - do not use these
+    extra middle/residual stems to recompute or second-guess that strength
+    verdict; they're additional Ten God color for the reading, not a
+    correction to the strength method.
+
+    Returns, per pillar, a list of {"stem", "qi_type", "ten_god"} dicts."""
+    return calculate_chart_hidden_stems(pillars)
 
 
 @mcp.tool()

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 # --- IMPORT OUR EXISTING ENGINES ---
 from core.time_engine import get_true_solar_time
-from core.bazi_math import calculate_bazi_chart, get_element_counts ,calculate_chart_ten_gods
+from core.bazi_math import calculate_bazi_chart, get_element_counts, calculate_chart_ten_gods, calculate_chart_hidden_stems
 from core.bazi_interactions import find_branch_interactions, find_stem_combinations, get_current_period
 from core.bazi_strength import analyze_day_master_strength
 from core.ai_engine import rectify_birth_hour
@@ -121,6 +121,7 @@ def calculate_bazi(request: BaziRequest,
         elements = get_element_counts(pillars)
 
         ten_gods = calculate_chart_ten_gods(pillars)
+        hidden_stems = calculate_chart_hidden_stems(pillars)
         branch_interactions = find_branch_interactions(pillars)
         stem_combinations = find_stem_combinations(pillars)
         day_master_strength = analyze_day_master_strength(pillars)
@@ -129,6 +130,7 @@ def calculate_bazi(request: BaziRequest,
             "user": request.name,
             "pillars": pillars,
             "ten_gods": ten_gods,
+            "hidden_stems": hidden_stems,
             "da_yuns": da_yuns,
             "elements": elements,
             "branch_interactions": branch_interactions,
