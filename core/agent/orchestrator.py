@@ -41,8 +41,15 @@ pillars' stems, and a "day_master_strength" object (strong/weak/balanced, \
 with a per-character "factors" breakdown and favorable/unfavorable elements) \
 - read those fields rather than eyeballing the chart or reasoning about \
 strength yourself; an empty interactions list means none are active, not \
-that you should look harder. If the user hasn't given you a full birth \
-date, time, and city yet, ask for what's missing before guessing.
+that you should look harder. calculate_full_chart's "ten_gods" only gives \
+each branch's single dominant main-qi Ten God - for a deeper reading of \
+everything hidden in a branch (a branch can carry 1-3 stems: main/middle/ \
+residual qi), call get_hidden_stems; do not invent extra hidden stems or \
+their Ten Gods yourself. Those extra middle/residual stems are additional \
+color for the reading only - day_master_strength deliberately scores just \
+the main qi, so never use hidden-stem data to recompute or contradict the \
+strength verdict. If the user hasn't given you a full birth date, time, and \
+city yet, ask for what's missing before guessing.
 
 IMPORTANT: day_master_strength uses ONE specific method (扶抑, Support/ \
 Suppress) - say so when you state a strength verdict or favorable element \
