@@ -83,6 +83,7 @@ export default function Chat() {
     // Older saved charts may predate branch_interactions/stem_combinations/
     // day_master_strength, so only include them when present.
     const extraFields = [
+      chartData.hidden_stems && `Hidden Stems (藏干, full breakdown per branch): ${JSON.stringify(chartData.hidden_stems)}`,
       chartData.branch_interactions && `Branch Interactions: ${JSON.stringify(chartData.branch_interactions)}`,
       chartData.stem_combinations && `Stem Combinations: ${JSON.stringify(chartData.stem_combinations)}`,
       chartData.day_master_strength && `Day Master Strength: ${JSON.stringify(chartData.day_master_strength)}`,
