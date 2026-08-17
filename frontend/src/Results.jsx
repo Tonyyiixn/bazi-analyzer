@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
+import TenGodLabel from './TenGodLabel';
 
 // Helper function to colorize Chinese characters based on their Bazi Element
 const getElementColor = (char) => {
@@ -124,14 +125,14 @@ export default function Results() {
                     <span className={`text-3xl font-serif-display ${getElementColor(chartData.pillars[pKey][0])}`}>
                       {chartData.pillars[pKey][0]}
                     </span>
-                    <span className="text-xs font-semibold text-gold-500 mt-1">{chartData.ten_gods[pKey].stem}</span>
+                    <TenGodLabel name={chartData.ten_gods[pKey].stem} className="text-xs font-semibold text-gold-500 mt-1" />
                   </div>
                   {/* Branch (lower) */}
                   <div className="flex flex-col items-center mt-2 pt-2 border-t border-ink-700">
                     <span className={`text-3xl font-serif-display ${getElementColor(chartData.pillars[pKey][1])}`}>
                       {chartData.pillars[pKey][1]}
                     </span>
-                    <span className="text-xs font-semibold text-jade-500 mt-1">{chartData.ten_gods[pKey].branch}</span>
+                    <TenGodLabel name={chartData.ten_gods[pKey].branch} className="text-xs font-semibold text-jade-500 mt-1" />
                   </div>
                   {/* Hidden Stems (藏干) - every stem the branch carries, not just main qi */}
                   {chartData.hidden_stems?.[pKey]?.length > 0 && (
@@ -141,9 +142,10 @@ export default function Results() {
                           <span className={`font-serif-display text-center ${getElementColor(hs.stem)} ${hs.qi_type === 'main' ? 'text-base' : 'text-sm opacity-60'}`}>
                             {hs.stem}
                           </span>
-                          <span className={`text-left leading-tight ${hs.qi_type === 'main' ? 'text-[10px] font-semibold text-parchment-300' : 'text-[10px] text-parchment-600'}`}>
-                            {hs.ten_god}
-                          </span>
+                          <TenGodLabel
+                            name={hs.ten_god}
+                            className={`text-left leading-tight ${hs.qi_type === 'main' ? 'text-[10px] font-semibold text-parchment-300' : 'text-[10px] text-parchment-600'}`}
+                          />
                         </div>
                       ))}
                     </div>
@@ -290,7 +292,7 @@ export default function Results() {
                   ))}
                 </div>
                 <p className="text-xs text-gold-500 font-semibold mb-2">
-                  {currentPeriod.liu_nian.ten_gods.stem} / {currentPeriod.liu_nian.ten_gods.branch}
+                  <TenGodLabel name={currentPeriod.liu_nian.ten_gods.stem} /> / <TenGodLabel name={currentPeriod.liu_nian.ten_gods.branch} />
                 </p>
                 {currentPeriod.liu_nian.branch_interactions.length === 0 ? (
                   <p className="text-xs text-parchment-600 italic">No active interactions with the natal chart.</p>
@@ -316,7 +318,7 @@ export default function Results() {
                   ))}
                 </div>
                 <p className="text-xs text-gold-500 font-semibold mb-2">
-                  {currentPeriod.liu_yue.ten_gods.stem} / {currentPeriod.liu_yue.ten_gods.branch}
+                  <TenGodLabel name={currentPeriod.liu_yue.ten_gods.stem} /> / <TenGodLabel name={currentPeriod.liu_yue.ten_gods.branch} />
                 </p>
                 {currentPeriod.liu_yue.branch_interactions.length === 0 ? (
                   <p className="text-xs text-parchment-600 italic">No active interactions with the natal chart or Liu Nian.</p>
