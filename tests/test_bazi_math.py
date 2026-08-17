@@ -20,8 +20,11 @@ from core.bazi_math import (
     calculate_chart_ten_gods,
     get_year_pillar,
     get_month_pillar,
+    get_hidden_stems_ten_gods,
+    calculate_chart_hidden_stems,
     STEM_ATTRIBUTES,
     BRANCH_MAIN_QI,
+    BRANCH_HIDDEN_STEMS,
 )
 
 ALL_STEMS = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸']
@@ -184,6 +187,70 @@ def test_calculate_chart_ten_gods_handles_malformed_input_gracefully():
     result = calculate_chart_ten_gods({"year": "", "month": "", "day": "", "hour": ""})
     assert result['day']['stem'] == 'Day Master'
     assert result['year'] == {'stem': 'N/A', 'branch': 'N/A'}
+
+
+# ---------------------------------------------------------------------------
+# VERIFIED: BRANCH_HIDDEN_STEMS (藏干) is standardized traditional theory
+# (the same table taught across schools, unlike 用神 selection) - checked
+# here against BRANCH_MAIN_QI (each branch's first/main entry must agree)
+# and against the well-known counts (four branches carry only their main qi;
+# two - 午 and 亥 - carry exactly two; the remaining six carry three).
+# ---------------------------------------------------------------------------
+
+def test_branch_hidden_stems_covers_all_12_branches_with_valid_stems():
+    assert set(BRANCH_HIDDEN_STEMS.keys()) == set(ALL_BRANCHES)
+    for branch, entries in BRANCH_HIDDEN_STEMS.items():
+        for stem, qi_type in entries:
+            assert stem in STEM_ATTRIBUTES, f"{branch} -> {stem} is not a valid stem"
+            assert qi_type in {'main', 'middle', 'residual'}
+
+
+def test_branch_hidden_stems_main_entry_matches_branch_main_qi():
+    for branch, main_stem in BRANCH_MAIN_QI.items():
+        first_stem, first_qi_type = BRANCH_HIDDEN_STEMS[branch][0]
+        assert first_qi_type == 'main'
+        assert first_stem == main_stem
+
+
+def test_branch_hidden_stems_qi_counts_match_standard_theory():
+    single_qi_branches = {'子', '卯', '酉'}  # only ever carry their main qi
+    two_qi_branches = {'午', '亥'}
+    for branch, entries in BRANCH_HIDDEN_STEMS.items():
+        if branch in single_qi_branches:
+            assert len(entries) == 1
+        elif branch in two_qi_branches:
+            assert len(entries) == 2
+        else:
+            assert len(entries) == 3
+
+
+def test_get_hidden_stems_ten_gods_returns_main_qi_first_with_correct_ten_gods():
+    # Day Master 甲 (Yang Wood), branch 丑: 己(main,Direct Wealth)/癸(middle,
+    # Direct Resource)/辛(residual,Direct Officer) - cross-checked against
+    # EXPECTED_TEN_GODS_FROM_JIA above.
+    result = get_hidden_stems_ten_gods('甲', '丑')
+    assert [(r['stem'], r['qi_type']) for r in result] == [
+        ('己', 'main'), ('癸', 'middle'), ('辛', 'residual'),
+    ]
+    assert [r['ten_god'] for r in result] == ['Direct Wealth', 'Direct Resource', 'Direct Officer']
+
+
+def test_get_hidden_stems_ten_gods_single_qi_branch():
+    result = get_hidden_stems_ten_gods('甲', '卯')
+    assert result == [{'stem': '乙', 'qi_type': 'main', 'ten_god': 'Rob Wealth'}]
+
+
+def test_calculate_chart_hidden_stems_uses_day_stem_as_day_master():
+    pillars = {"year": "甲午", "month": "戊申", "day": "壬子", "hour": "乙丑"}
+    result = calculate_chart_hidden_stems(pillars)
+    assert set(result.keys()) == {"year", "month", "day", "hour"}
+    # day branch 子 only carries 癸 (main) - Day Master 壬 vs 癸 -> Rob Wealth
+    assert result['day'] == [{'stem': '癸', 'qi_type': 'main', 'ten_god': 'Rob Wealth'}]
+
+
+def test_calculate_chart_hidden_stems_handles_malformed_input_gracefully():
+    result = calculate_chart_hidden_stems({"year": "", "month": "", "day": "", "hour": ""})
+    assert result == {'year': [], 'month': [], 'day': [], 'hour': []}
 
 
 # ---------------------------------------------------------------------------
