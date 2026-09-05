@@ -8,7 +8,7 @@ fastapi
 uvicorn
 pydantic
 anthropic
-mcp
+mcp<2
 scikit-learn
 python-jose[cryptography]
 passlib[bcrypt]
