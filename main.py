@@ -1,3 +1,5 @@
+import os
+
 from contextlib import asynccontextmanager
 from datetime import datetime
 
@@ -16,7 +18,7 @@ from core.skills.registry import SKILLS, DEFAULT_SKILL_ID
 
 from core.schemas import BaziRequest, UserCreate, UserResponse, Token, UserLogin, TimeTestAnswers, ChatRequest, PillarsRequest
 from core import models, security, schemas
-from core.database import engine, get_db
+from core.database import get_db
 
 
 @asynccontextmanager
@@ -30,8 +32,10 @@ async def lifespan(app: FastAPI):
 # Initialize the API
 app = FastAPI(title="Bazi Analyzer API", version="2.0", lifespan=lifespan)
 
-# This line tells SQLAlchemy to create the database file and tables!
-models.Base.metadata.create_all(bind=engine)
+# Schema creation is Alembic's job ("alembic upgrade head"), not the app's.
+# create_all() silently no-ops on an existing table, so it could never apply a
+# column change - which made it fine for a throwaway local file and wrong for a
+# database that has to survive a deploy.
 
 # ==========================================
 # AUTHENTICATION ROUTES
@@ -78,12 +82,19 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
 
 
 # CORS config allows your future React app to talk to this API
+# Comma-separated in the environment; defaults to the local Vite dev server so
+# a fresh clone still works with no configuration.
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+    ).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    ], # We will lock this down to your React URL later
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -94,6 +105,21 @@ app.add_middleware(
 @app.get("/")
 def read_root():
     return {"status": "Bazi API is online and waiting for React."}
+
+
+@app.get("/health")
+def health():
+    """Liveness probe for the host platform's health check.
+
+    Deliberately always 200 when the process is serving: the app still answers
+    chart calculations even if the agent is unhappy, and failing the probe would
+    have the platform recycle the instance in a loop. The "mcp" field is there
+    for a human reading the response, not for the platform to act on."""
+    agent = getattr(app.state, "bazi_agent", None)
+    return {
+        "status": "ok",
+        "mcp": "up" if agent is not None and agent.is_connected else "down",
+    }
 
 @app.post("/api/v1/calculate")
 def calculate_bazi(request: BaziRequest,
