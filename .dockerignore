@@ -1,3 +1,27 @@
+# Virtualenvs - the image builds its own at /opt/venv
 venv/
-__pycache__/
+env/
+.venv/
+
+# Secrets never belong in an image layer
 .env
+.env.*
+
+# Local SQLite databases
+*.db
+*.sqlite3
+
+# The frontend is deployed separately (Vercel), not from this image
+frontend/
+
+# Not needed at runtime
+tests/
+.pytest_cache/
+.git/
+.github/
+.vscode/
+.idea/
+
+__pycache__/
+*.pyc
+.DS_Store
