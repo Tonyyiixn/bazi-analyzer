@@ -124,6 +124,13 @@ class BaziAgent:
     async def stop(self):
         await self._stack.aclose()
 
+    @property
+    def is_connected(self) -> bool:
+        """Whether start() got as far as a live MCP session. Note this reflects
+        the handshake having succeeded, not that the subprocess is still
+        answering - a mid-life death leaves the session object in place."""
+        return self._session is not None
+
     async def _call_tool(self, name: str, arguments: dict) -> str:
         result = await self._session.call_tool(name, arguments)
         parts = [block.text for block in result.content if hasattr(block, "text")]
