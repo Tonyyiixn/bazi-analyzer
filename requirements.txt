@@ -1,16 +1,22 @@
-python-dotenv
-lunar-python
-geopy
-timezonefinder
-pytz
-SQLAlchemy
-fastapi
-uvicorn
-pydantic
-anthropic
-mcp<2
-scikit-learn
-python-jose[cryptography]
-passlib[bcrypt]
+# Pinned to the versions this app was last verified against. Unpinned installs
+# resolve to whatever is newest on the day of the build, which is how an
+# `mcp` 2.x release (FastMCP renamed to MCPServer) silently broke the agent's
+# tool server on a fresh machine. Bump deliberately, then re-run the tests.
+python-dotenv==1.2.3
+lunar-python==1.4.8
+geopy==2.5.0
+timezonefinder==8.3.0
+pytz==2026.3.post1
+SQLAlchemy==2.0.52
+alembic==1.20.0
+psycopg2-binary==2.9.13
+fastapi==0.141.1
+uvicorn==0.52.4
+pydantic==2.13.5
+anthropic==1.3.0
+mcp==1.29.1
+scikit-learn==1.9.0
+python-jose[cryptography]==3.5.0
+passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
-pytest
+pytest==9.1.1
