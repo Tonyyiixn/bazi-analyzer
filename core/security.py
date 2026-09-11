@@ -1,4 +1,7 @@
+import os
+
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 from jose import jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
@@ -8,9 +11,13 @@ from core import models, database
 
 
 
+load_dotenv()
+
 # 1. JWT Configuration
-# In a real app, this goes in your .env file! For testing today, we hardcode it.
-SECRET_KEY = "super-secret-bazi-key-change-this-later"
+# Required, with no fallback on purpose: an instance signing tokens with a
+# constant that is public in the repo would let anyone forge a login for any
+# account, so it is better to refuse to boot than to boot insecurely.
+SECRET_KEY = os.environ["JWT_SECRET_KEY"]
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # Wristband expires in 7 days
 
