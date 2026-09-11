@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { API } from './api';
 
 export default function Dashboard() {
   const [charts, setCharts] = useState([]);
@@ -18,7 +19,7 @@ export default function Dashboard() {
       }
 
       try {
-        const response = await fetch("http://127.0.0.1:8000/api/v1/charts", {
+        const response = await fetch(`${API}/charts`, {
           method: "GET",
           headers: { "Authorization": `Bearer ${token}` }
         });
@@ -42,7 +43,7 @@ export default function Dashboard() {
     if (!window.confirm("Are you sure you want to delete this chart?")) return;
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/charts/${chartId}`, {
+      const response = await fetch(`${API}/charts/${chartId}`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${token}` }
       });

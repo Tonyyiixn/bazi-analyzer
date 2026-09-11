@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE } from './api';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -15,7 +16,7 @@ export default function Auth() {
     const endpoint = isLogin ? '/api/v1/login' : '/api/v1/signup';
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000${endpoint}`, {
+      const response = await fetch(`${API_BASE}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)

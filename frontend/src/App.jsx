@@ -6,6 +6,7 @@ import ChartDetail from './ChartDetail';
 import Results from './Results';
 import Chat from './Chat';
 import WheelPicker from './WheelPicker';
+import { API } from './api';
 
 const YEAR_OPTIONS = Array.from({ length: 2100 - 1900 + 1 }, (_, i) => 1900 + i);
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -92,7 +93,7 @@ function App() {
 
     try {
       // Send the JSON payload to our Python backend
-      const response = await fetch("http://127.0.0.1:8000/api/v1/calculate", {
+      const response = await fetch(`${API}/calculate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -122,7 +123,7 @@ function App() {
     setError(null);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/v1/rectify-time", {
+      const response = await fetch(`${API}/rectify-time`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answers: userTraits }),

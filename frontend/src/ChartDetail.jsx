@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import TenGodLabel from './TenGodLabel';
+import { API } from './api';
 
 // Helper function to colorize Chinese characters based on their Bazi Element
 const getElementColor = (char) => {
@@ -48,7 +49,7 @@ export default function ChartDetail() {
     const pillars = chartRecord?.chart_data?.pillars;
     if (!pillars) return;
     const token = localStorage.getItem('bazi_token');
-    fetch("http://127.0.0.1:8000/api/v1/current-period", {
+    fetch(`${API}/current-period`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ pillars }),
@@ -67,7 +68,7 @@ export default function ChartDetail() {
       }
 
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/v1/charts/${id}`, {
+        const response = await fetch(`${API}/charts/${id}`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import { API } from './api';
 
 // Maps markdown elements to theme-matched styling for chat bubbles.
 // `dark` is true for the assistant's ink-background bubble, false for the
@@ -25,7 +26,6 @@ const markdownComponents = (dark) => ({
   ),
 });
 
-const API = 'http://127.0.0.1:8000/api/v1';
 
 export default function Chat() {
   const location = useLocation();
