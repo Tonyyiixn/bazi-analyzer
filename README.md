@@ -54,8 +54,24 @@ Bazi_Project/
 └── frontend/                 # React/Vite app
 ```
 
-## Deployment Status
-The **frontend** is deployed on Vercel as a static build. The **backend** (FastAPI + SQLite + the MCP tool server) is not yet deployed anywhere — it currently only runs locally. Its subprocess-based architecture and file-based database also make it a poor fit for a serverless platform like Vercel as-is; it needs a host that keeps a persistent process running (a small VPS or a PaaS like Render/Railway/Fly.io).
+## Deployment
+Both halves auto-deploy from `main`.
+
+| Piece | Where | Notes |
+|---|---|---|
+| Frontend | **Vercel** (static Vite build) | `VITE_API_URL` env var points it at the backend |
+| Backend | **Render** (Docker web service, free tier) | Built from the repo's `Dockerfile` via `render.yaml`; health check on `/health` |
+| Database | **Neon** (managed Postgres, free tier) | Same region as the backend (us-east-2) |
+
+The backend keeps a long-lived process (it spawns the MCP tool server as a subprocess at startup), which is why it runs as a container on Render rather than as serverless functions. On the free tier Render spins the service down after ~15 minutes idle, so the first request after a quiet spell takes ~30-60s while the container and MCP handshake come back up.
+
+**Configuration** is entirely via environment variables - see `.env.example` (backend) and `frontend/.env.example`. `JWT_SECRET_KEY` and `DATABASE_URL` are required; the app refuses to start without the former and falls back to a local SQLite file without the latter.
+
+**Schema changes** go through Alembic. Migrations are deliberately not run on container startup (instances would race); run them against the database before deploying the code that needs them:
+
+```bash
+DATABASE_URL=<postgres url> alembic upgrade head
+```
 
 ---
 
