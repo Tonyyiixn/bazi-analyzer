@@ -34,10 +34,15 @@ COPY . .
 RUN useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app
 USER appuser
 
-# App Runner's default listening port.
+# Default listening port; PaaS hosts (Render, Railway, Cloud Run) override it
+# by injecting PORT, which the CMD below honours.
 EXPOSE 8080
 
 # Migrations are deliberately NOT run here. With more than one instance the
 # containers would race each other on startup, so "alembic upgrade head" is a
 # separate step run once against the database before rolling out a new image.
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+#
+# "exec" so uvicorn replaces the shell as PID 1 and receives SIGTERM directly
+# on shutdown, instead of the shell swallowing it and the host force-killing
+# the container after its grace period.
+CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"]

@@ -1,0 +1,33 @@
+# Render Blueprint - https://render.com/docs/blueprint-spec
+#
+# Creating the service: Render dashboard -> New -> Blueprint -> pick this repo.
+# Render reads this file and prompts once for every env var marked
+# "sync: false"; those values live only in Render's dashboard, never here.
+services:
+  - type: web
+    name: bazi-backend
+    runtime: docker
+    branch: deployment
+    # Same region as the Neon database (us-east-2) so every query isn't a
+    # cross-region round trip.
+    region: ohio
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Prompted for in the dashboard on first deploy.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Neon's *pooled* connection string (the "-pooler" host). The direct
+      # endpoint is only for running migrations.
+      - key: DATABASE_URL
+        sync: false
+      # Comma-separated. The Vercel frontend's origin, e.g.
+      # https://bazi-analyzer.vercel.app - no trailing slash.
+      - key: CORS_ORIGINS
+        sync: false
+      # Render generates a random value; it never needs to be known to anyone.
+      - key: JWT_SECRET_KEY
+        generateValue: true
