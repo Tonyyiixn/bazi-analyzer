@@ -1,5 +1,7 @@
 # AI-Driven Bazi Astrology Assistant
 
+**Live:** [bazi-analyzer-rose.vercel.app](https://bazi-analyzer-rose.vercel.app) — the backend runs on a free tier that sleeps when idle, so the first request after a quiet spell can take up to a minute.
+
 A full-stack web application that grounds traditional Chinese Bazi (Four Pillars of Destiny) astrology in **deterministic Python calculation**, then layers a Claude-powered chat agent on top for natural-language readings — instead of letting an LLM freehand-reason about a chart, every structural fact (pillars, Ten Gods, interactions, strength) is computed by pure functions and handed to the agent as tools.
 
 ## Key Features
@@ -28,16 +30,17 @@ A full-stack web application that grounds traditional Chinese Bazi (Four Pillars
 
 ## Tech Stack
 * **Frontend:** React 19, Vite, React Router, Tailwind CSS v4
-* **Backend:** Python, FastAPI, SQLAlchemy (SQLite), Pydantic, JWT auth
+* **Backend:** Python 3.12, FastAPI, SQLAlchemy + Alembic (Postgres in production, SQLite locally), Pydantic, JWT auth
 * **AI / LLM:** Anthropic Claude API, Model Context Protocol (MCP), scikit-learn (TF-IDF retrieval)
+* **Infrastructure:** Docker, Render (backend), Neon (Postgres), Vercel (frontend)
 * **Testing:** pytest — 100+ tests, split into VERIFIED (checked against independently-confirmable traditional theory, e.g. the 60-year sexagenary cycle epoch or the standard Ten God table) vs. REGRESSION BASELINE (pins current output, not a correctness proof) vs. hand-tallied algorithm self-consistency checks for genuinely contested judgment calls (like Day Master strength)
 
 ---
 
 ## Project Structure
 ```
-Bazi_Project/
-├── main.py                  # FastAPI app: auth, chart calculation, chat, saved charts
+bazi-analyzer/
+├── main.py                   # FastAPI app: auth, chart calculation, chat, saved charts, /health
 ├── core/
 │   ├── bazi_math.py          # Pillars, Ten Gods, hidden stems (pure calculation)
 │   ├── bazi_interactions.py  # Branch/stem interactions, Liu Nian/Liu Yue
@@ -48,10 +51,17 @@ Bazi_Project/
 │   ├── consistency_gate.py   # Flags replies contradicting computed facts
 │   ├── guardrails.py         # High-stakes-question detection
 │   ├── rag.py                # TF-IDF retrieval over principle docs
-│   ├── skills/                # Career/relationship/health/yearly-forecast lenses
-│   └── knowledge/principles/  # Curated Bazi theory reference docs
+│   ├── database.py           # SQLAlchemy engine, driven by DATABASE_URL
+│   ├── models.py             # ORM tables (users, saved charts, chat sessions/messages)
+│   ├── skills/               # Career/relationship/health/yearly-forecast lenses
+│   └── knowledge/principles/ # Curated Bazi theory reference docs
+├── alembic/                  # Schema migrations (versions/ holds the history)
 ├── tests/                    # pytest suite
-└── frontend/                 # React/Vite app
+├── frontend/                 # React/Vite app
+│   └── src/api.js            # Single source of the backend URL (VITE_API_URL)
+├── Dockerfile                # Multi-stage image the backend deploys as
+├── render.yaml               # Render Blueprint for the backend service
+└── .env.example              # Every backend env var, documented
 ```
 
 ## Deployment
@@ -86,19 +96,27 @@ cd bazi-analyzer
 ```
 
 ### 2. Backend Setup (FastAPI)
-From the repo root:
+Requires Python 3.10+ (3.12 is what's verified and deployed). From the repo root:
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+python3 -m venv venv          # Windows: py -3.12 -m venv venv
+source venv/bin/activate      # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-**Environment Variables:**
-Create a `.env` file in the repo root with your Anthropic API key:
+**Environment variables.** Copy `.env.example` to `.env` and fill in the two required values:
 
 ```env
-ANTHROPIC_API_KEY=your_api_key_here
+ANTHROPIC_API_KEY=sk-ant-...
+JWT_SECRET_KEY=...            # python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+`DATABASE_URL` and `CORS_ORIGINS` can stay unset locally — the app falls back to a SQLite file and the Vite dev server's origin.
+
+**Create the database.** Tables are managed by Alembic, not created on startup, so this step is required once on a fresh clone:
+
+```bash
+alembic upgrade head
 ```
 
 Start the backend server:
@@ -116,9 +134,17 @@ cd frontend
 npm install
 npm run dev
 ```
-*The UI will be running at `http://localhost:5173`*
+*The UI will be running at `http://localhost:5173`*, calling the local backend by default. To point it elsewhere, set `VITE_API_URL` — see `frontend/.env.example`.
 
-### 4. Run the Tests
+### 4. Run with Docker (optional)
+The same image that deploys to Render:
+
+```bash
+docker build -t bazi-backend .
+docker run -p 8080:8080 --env-file .env bazi-backend
+```
+
+### 5. Run the Tests
 From the repo root, with the virtualenv active:
 
 ```bash
