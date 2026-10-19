@@ -48,6 +48,7 @@ bazi-analyzer/
 │   ├── time_engine.py        # True Solar Time correction
 │   ├── mcp_server.py         # MCP tools exposing the chart engine to the agent
 │   ├── agent/orchestrator.py # Claude tool-use loop + system persona
+│   ├── agent/replay.py       # Record/replay harness for the agent loop
 │   ├── consistency_gate.py   # Flags replies contradicting computed facts
 │   ├── guardrails.py         # High-stakes-question detection
 │   ├── rag.py                # TF-IDF retrieval over principle docs
@@ -56,6 +57,7 @@ bazi-analyzer/
 │   ├── skills/               # Career/relationship/health/yearly-forecast lenses
 │   └── knowledge/principles/ # Curated Bazi theory reference docs
 ├── alembic/                  # Schema migrations (versions/ holds the history)
+├── bin/agent_replay.py       # CLI: record a real conversation, replay it offline
 ├── tests/                    # pytest suite
 ├── frontend/                 # React/Vite app
 │   └── src/api.js            # Single source of the backend URL (VITE_API_URL)
@@ -149,4 +151,16 @@ From the repo root, with the virtualenv active:
 
 ```bash
 pytest tests/ -v
+```
+
+### 6. Record and Replay Agent Conversations
+`bin/agent_replay.py` logs every Claude API request/response and every MCP tool call's input/output from one real agent turn to a JSON file. Replay runs the real agent loop again with both of those boundaries stubbed from that file, so it needs no API key and no network. Replay fails, with the JSON path that changed, if the code now sends a different request or tool call than the one recorded.
+
+```bash
+# Real API + real tools (needs ANTHROPIC_API_KEY)
+python bin/agent_replay.py record "Born 1990-05-15 15:00 in Shanghai. How is my career?" --skill career -o recordings/career.json
+
+python bin/agent_replay.py show recordings/career.json               # call timeline
+python bin/agent_replay.py replay recordings/career.json             # exit 1 on divergence
+python bin/agent_replay.py replay recordings/career.json --lenient   # list every mismatch
 ```

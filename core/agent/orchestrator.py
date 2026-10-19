@@ -99,11 +99,14 @@ def _skill_menu() -> str:
 
 
 class BaziAgent:
-    def __init__(self):
+    def __init__(self, client=None):
+        """client: anything exposing an async messages.create(**kwargs) -
+        defaults to the real AsyncAnthropic; core/agent/replay.py passes a
+        stub that serves recorded responses instead."""
         self._stack = AsyncExitStack()
         self._session: ClientSession | None = None
         self._tools: list[dict] = []
-        self._client = anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        self._client = client or anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
     async def start(self):
         params = StdioServerParameters(
@@ -130,6 +133,11 @@ class BaziAgent:
         the handshake having succeeded, not that the subprocess is still
         answering - a mid-life death leaves the session object in place."""
         return self._session is not None
+
+    def _today(self) -> date:
+        """Overridden by replay to pin the date a recording was made on, so
+        the system prompt it sends matches the recorded one."""
+        return date.today()
 
     async def _call_tool(self, name: str, arguments: dict) -> str:
         result = await self._session.call_tool(name, arguments)
@@ -169,7 +177,7 @@ class BaziAgent:
         # goes stale if the server process stays up across a date/year change.
         # Placed last so it doesn't sit in front of the otherwise-stable
         # system prompt if prompt caching is ever added later.
-        system += f"\n\nToday's date is {date.today().isoformat()}."
+        system += f"\n\nToday's date is {self._today().isoformat()}."
 
         # High-stakes question guardrail: cheap keyword scan of the newest
         # user message only (not the whole history) so old messages can't
