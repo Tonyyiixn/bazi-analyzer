@@ -15,7 +15,9 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /health
-    autoDeploy: true
+    # Deploy a push to main only after its GitHub Actions checks pass
+    # (.github/workflows/tests.yml), not on every commit.
+    autoDeployTrigger: checksPass
     envVars:
       # Prompted for in the dashboard on first deploy.
       - key: ANTHROPIC_API_KEY
