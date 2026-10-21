@@ -1,5 +1,7 @@
 # AI-Driven Bazi Astrology Assistant
 
+[![tests](https://github.com/Tonyyiixn/bazi-analyzer/actions/workflows/tests.yml/badge.svg)](https://github.com/Tonyyiixn/bazi-analyzer/actions/workflows/tests.yml)
+
 **Live:** [bazi-analyzer-rose.vercel.app](https://bazi-analyzer-rose.vercel.app) — the backend runs on a free tier that sleeps when idle, so the first request after a quiet spell can take up to a minute.
 
 A full-stack web application that grounds traditional Chinese Bazi (Four Pillars of Destiny) astrology in **deterministic Python calculation**, then layers a Claude-powered chat agent on top for natural-language readings — instead of letting an LLM freehand-reason about a chart, every structural fact (pillars, Ten Gods, interactions, strength) is computed by pure functions and handed to the agent as tools.
