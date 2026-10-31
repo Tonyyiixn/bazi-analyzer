@@ -43,6 +43,29 @@ def test_flags_element_called_unfavorable_when_actually_favorable():
     assert any("Water" in w and "unfavorable" in w for w in warnings)
 
 
+def test_strength_phrase_inside_a_longer_word_is_not_a_claim():
+    facts = {"day_master_strength": _strength("strong")}
+    reply = "Your Day Master is weakened in summer, but overall it holds up."
+    assert check_consistency(reply, facts) == []
+
+
+def test_unfavorable_is_not_read_as_favorable():
+    facts = {"day_master_strength": _strength("strong", favorable=["Fire"], unfavorable=["Water"])}
+    assert check_consistency("Water is unfavorable for you.", facts) == []
+
+
+def test_element_window_stops_at_clause_break():
+    facts = {"day_master_strength": _strength("strong", favorable=["Fire"], unfavorable=["Water"])}
+    reply = "Fire is favorable, while Water is unfavorable."
+    assert check_consistency(reply, facts) == []
+
+
+def test_placeholders_are_not_claims():
+    facts = {"day_master_strength": _strength("weak", favorable=["Water"], unfavorable=["Fire"])}
+    reply = "Your Day Master is {{day_master_strength}}; {{favorable_elements}} are favorable."
+    assert check_consistency(reply, facts) == []
+
+
 def test_flags_invented_clash_when_no_interactions_detected():
     facts = {"branch_interactions": []}
     reply = "There's a clash between your Day and Hour branches that causes tension."
