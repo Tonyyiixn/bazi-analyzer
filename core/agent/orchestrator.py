@@ -17,6 +17,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from core.consistency_gate import check_consistency
+from core.fact_placeholders import FACT_PLACEHOLDER_INSTRUCTIONS, render_fact_placeholders
 from core.guardrails import build_guardrail_instructions, check_guardrail_compliance, detect_categories
 from core.skills.registry import SKILLS, DEFAULT_SKILL_ID
 
@@ -170,7 +171,7 @@ class BaziAgent:
 
     async def run(self, messages: list[dict], skill_id: str | None) -> dict:
         skill = SKILLS.get(skill_id or DEFAULT_SKILL_ID, SKILLS[DEFAULT_SKILL_ID])
-        system = BASE_PERSONA + "\n\n" + skill.system_prompt
+        system = BASE_PERSONA + "\n\n" + FACT_PLACEHOLDER_INSTRUCTIONS + "\n\n" + skill.system_prompt
         if skill.id == DEFAULT_SKILL_ID:
             system += "\n\nAvailable specialized lenses - adopt whichever fits the question:\n" + _skill_menu()
         # Computed fresh per request (not baked in at import time) so it never
@@ -205,7 +206,12 @@ class BaziAgent:
                         text = "I can't help with that request."
                     elif response.stop_reason == "max_tokens":
                         text = "That answer ran out of room before finishing - try asking again, maybe more narrowly."
+                # The gate reads the model's raw text, so it only sees verdicts
+                # the model wrote itself - placeholder-filled facts come from
+                # the tools and can't contradict them.
                 warnings = check_consistency(text, facts)
+                text, placeholder_warnings = render_fact_placeholders(text, facts)
+                warnings += placeholder_warnings
                 if warnings:
                     logger.warning("Consistency gate flagged reply: %s", warnings)
                 guardrail_warnings = check_guardrail_compliance(text, guardrail_categories)
