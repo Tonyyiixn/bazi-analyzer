@@ -27,10 +27,19 @@ STRENGTH_PHRASES = {
 INTERACTION_KEYWORDS = ["clash", "combination", "three harmony", "punishment", "harm", "break"]
 
 
+CLAUSE_BREAKS = ".!?;,\n"
+
+
 def _elements_near(text_lower: str, keyword: str, window: int = 40) -> set[str]:
+    """Elements within `window` chars of `keyword`, without crossing a clause
+    break - so in "Fire is favorable, while Water is unfavorable" Water isn't
+    read as near "favorable". Word boundaries stop "favorable" matching
+    inside "unfavorable"."""
     hits = set()
-    for m in re.finditer(re.escape(keyword), text_lower):
+    for m in re.finditer(rf"\b{re.escape(keyword)}\b", text_lower):
         start, end = max(0, m.start() - window), min(len(text_lower), m.end() + window)
+        start = max([start] + [text_lower.rfind(c, 0, m.start()) + 1 for c in CLAUSE_BREAKS])
+        end = min([end] + [i for i in (text_lower.find(c, m.end()) for c in CLAUSE_BREAKS) if i != -1])
         snippet = text_lower[start:end]
         for el in ELEMENTS:
             if re.search(rf"\b{el.lower()}\b", snippet):
@@ -46,7 +55,7 @@ def check_consistency(reply: str, facts: dict) -> list[str]:
     if strength:
         actual = strength.get("strength")
         for claimed, phrases in STRENGTH_PHRASES.items():
-            if claimed != actual and any(p in lower for p in phrases):
+            if claimed != actual and any(re.search(rf"\b{re.escape(p)}\b", lower) for p in phrases):
                 warnings.append(
                     f"Reply claims Day Master strength is '{claimed}' but the computed strength is '{actual}'."
                 )
