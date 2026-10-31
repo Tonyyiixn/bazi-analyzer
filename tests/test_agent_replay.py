@@ -47,7 +47,8 @@ class ScriptedClient:
                 ],
                 "tool_use",
             ),
-            _message([{"type": "text", "text": "Using the Support/Suppress method, your Day Master is strong."}],
+            _message([{"type": "text",
+                       "text": "Using the Support/Suppress method, your Day Master reads as {{day_master_strength}}."}],
                      "end_turn"),
         ]
         self.messages = SimpleNamespace(create=self._create)
@@ -83,6 +84,14 @@ def test_recording_captures_both_boundaries_in_order(recording):
     second_request = recording["events"][2]["request"]
     assert second_request["messages"][-1]["content"][0]["tool_use_id"] == "toolu_01"
     assert recording["tools"], "MCP tool list should be captured at start()"
+
+
+def test_reply_placeholder_is_filled_from_tool_output(recording):
+    strength = json.loads(recording["events"][1]["output"])["strength"]
+    assert recording["result"]["reply"] == (
+        f"Using the Support/Suppress method, your Day Master reads as {strength}."
+    )
+    assert recording["result"]["consistency_warnings"] == []
 
 
 def test_replay_reproduces_recorded_result(recording):
