@@ -1,0 +1,350 @@
+{
+  "claude": {
+    "calls": 8,
+    "errors": 0,
+    "parse_failures": {},
+    "stop_reasons": {
+      "end_turn": 8
+    },
+    "avg_tool_calls": 0.0,
+    "avg_latency_s": 17.07625,
+    "tokens": {
+      "input_tokens": 2798,
+      "output_tokens": 13428,
+      "cache_read_input_tokens": 0,
+      "cache_creation_input_tokens": 0
+    },
+    "accuracy": {
+      "day_pillar": {
+        "n": 1,
+        "accuracy": 1.0,
+        "accuracy_tst_changes_chart": null,
+        "accuracy_tst_irrelevant": 1.0
+      },
+      "all": {
+        "n": 2,
+        "accuracy": 1.0,
+        "accuracy_tst_changes_chart": null,
+        "accuracy_tst_irrelevant": 1.0
+      },
+      "stem_ten_god": {
+        "n": 1,
+        "accuracy": 1.0,
+        "accuracy_tst_changes_chart": null,
+        "accuracy_tst_irrelevant": 1.0
+      }
+    },
+    "stability": {
+      "groups": 1,
+      "repeat_agreement": 0.6666666666666666,
+      "wording_agreement": 0.5,
+      "field_agreement": {
+        "day_pillar": 0.5,
+        "day_master_element": 0.5,
+        "strength": 0.5,
+        "favorable_elements": 0.5,
+        "unfavorable_elements": 0.5
+      },
+      "core_matches_gold": 0.5
+    },
+    "interactions": {
+      "pillars": {
+        "n": 1,
+        "macro_f1": 1.0,
+        "micro_precision": null,
+        "micro_recall": null,
+        "micro_f1": null,
+        "exact_set_match": 1.0,
+        "invented_on_empty_charts": 0.0,
+        "per_type": {
+          "clash": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "combination": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "three_harmony": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "punishment": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "harm": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "break": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          }
+        }
+      },
+      "all": {
+        "n": 2,
+        "macro_f1": 1.0,
+        "micro_precision": null,
+        "micro_recall": null,
+        "micro_f1": null,
+        "exact_set_match": 1.0,
+        "invented_on_empty_charts": 0.0,
+        "per_type": {
+          "clash": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "combination": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "three_harmony": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "punishment": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "harm": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "break": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          }
+        }
+      },
+      "birth": {
+        "n": 1,
+        "macro_f1": 1.0,
+        "micro_precision": null,
+        "micro_recall": null,
+        "micro_f1": null,
+        "exact_set_match": 1.0,
+        "invented_on_empty_charts": 0.0,
+        "per_type": {
+          "clash": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "combination": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "three_harmony": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "punishment": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "harm": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "break": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          }
+        }
+      }
+    }
+  },
+  "mcp": {
+    "calls": 8,
+    "errors": 0,
+    "parse_failures": {},
+    "stop_reasons": {
+      "end_turn": 8
+    },
+    "avg_tool_calls": 1.125,
+    "avg_latency_s": 12.16625,
+    "tokens": {
+      "input_tokens": 129444,
+      "output_tokens": 8954,
+      "cache_read_input_tokens": 0,
+      "cache_creation_input_tokens": 0
+    },
+    "accuracy": {
+      "day_pillar": {
+        "n": 1,
+        "accuracy": 1.0,
+        "accuracy_tst_changes_chart": null,
+        "accuracy_tst_irrelevant": 1.0
+      },
+      "all": {
+        "n": 2,
+        "accuracy": 1.0,
+        "accuracy_tst_changes_chart": null,
+        "accuracy_tst_irrelevant": 1.0
+      },
+      "stem_ten_god": {
+        "n": 1,
+        "accuracy": 1.0,
+        "accuracy_tst_changes_chart": null,
+        "accuracy_tst_irrelevant": 1.0
+      }
+    },
+    "stability": {
+      "groups": 1,
+      "repeat_agreement": 1.0,
+      "wording_agreement": 1.0,
+      "field_agreement": {
+        "day_pillar": 1.0,
+        "day_master_element": 1.0,
+        "strength": 1.0,
+        "favorable_elements": 1.0,
+        "unfavorable_elements": 1.0
+      },
+      "core_matches_gold": 1.0
+    },
+    "interactions": {
+      "birth": {
+        "n": 1,
+        "macro_f1": 1.0,
+        "micro_precision": null,
+        "micro_recall": null,
+        "micro_f1": null,
+        "exact_set_match": 1.0,
+        "invented_on_empty_charts": 0.0,
+        "per_type": {
+          "clash": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "combination": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "three_harmony": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "punishment": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "harm": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "break": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          }
+        }
+      },
+      "all": {
+        "n": 2,
+        "macro_f1": 1.0,
+        "micro_precision": null,
+        "micro_recall": null,
+        "micro_f1": null,
+        "exact_set_match": 1.0,
+        "invented_on_empty_charts": 0.0,
+        "per_type": {
+          "clash": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "combination": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "three_harmony": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "punishment": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "harm": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "break": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          }
+        }
+      },
+      "pillars": {
+        "n": 1,
+        "macro_f1": 1.0,
+        "micro_precision": null,
+        "micro_recall": null,
+        "micro_f1": null,
+        "exact_set_match": 1.0,
+        "invented_on_empty_charts": 0.0,
+        "per_type": {
+          "clash": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "combination": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "three_harmony": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "punishment": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "harm": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          },
+          "break": {
+            "gold": 0,
+            "precision": null,
+            "recall": null
+          }
+        }
+      }
+    }
+  }
+}
