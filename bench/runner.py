@@ -5,7 +5,7 @@ Two arms, identical except for tool access:
 - claude: Claude alone - it has to work the chart out itself.
 - mcp:    Claude + this repo's MCP tools (core/mcp_server.py) over stdio.
 
-Each (question, repeat) becomes one line in bench/results/<run>/<arm>.jsonl
+Each (question, repeat) becomes one line in bench/results/<set>/<run>/<arm>.jsonl
 with the raw reply text, the tool calls made, token usage and latency.
 Parsing and grading happen in score.py, so a run never has to be repeated
 just because the scoring changes. Re-running the same --run resumes: pairs
@@ -16,9 +16,13 @@ city table generate.py built the gold from - so a flaky or rate-limited
 Nominatim can't silently fall back to clock time and make a correct tool
 call look wrong. --live-geocode uses the production server unchanged.
 
+Two question sets: dev (small, for debugging - filter it however you like)
+and eval (frozen, checksum-verified, and only ever run in full, so formal
+numbers always cover the same questions).
+
 Run from the repo root:
-    python -m bench.runner --run smoke --arm both --limit 3
-    python -m bench.runner --run full --model claude-haiku-4-5
+    python -m bench.runner --run try1 --limit 3                 # dev
+    python -m bench.runner --set eval --run v1 --model claude-haiku-4-5
 """
 import argparse
 import asyncio
@@ -34,7 +38,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 ROOT = Path(__file__).resolve().parent.parent
-QUESTIONS_PATH = Path(__file__).parent / "data" / "questions.jsonl"
+DATA_DIR = Path(__file__).parent / "data"
 RESULTS_DIR = Path(__file__).parent / "results"
 
 DEFAULT_MODEL = "claude-opus-5-5"
@@ -128,7 +132,18 @@ def _add_usage(total, usage):
 async def ask(client, args, arm, q, tools: McpTools | None):
     """Runs one question to completion. Returns the fields recorded per line."""
     convo = [{"role": "user", "content": build_prompt(q)}]
-    request = {"model": args.model, "max_tokens": MAX_TOKENS, "system": ARM_SYSTEM[arm]}
+    request = {
+        "model": args.model,
+        "max_tokens": MAX_TOKENS,
+        # Breakpoint on the system block caches tools + system, which is
+        # identical for every question in an arm. The top-level marker caches
+        # the growing conversation, so each tool-loop turn re-reads the
+        # previous one (chart results included) instead of paying full price.
+        # Prefixes under the model's minimum (e.g. the tool-less claude arm)
+        # silently don't cache - no error, just zero cache tokens.
+        "system": [{"type": "text", "text": ARM_SYSTEM[arm], "cache_control": {"type": "ephemeral"}}],
+        "cache_control": {"type": "ephemeral"},
+    }
     if args.effort:
         request["output_config"] = {"effort": args.effort}
     if tools:
@@ -162,8 +177,18 @@ async def ask(client, args, arm, q, tools: McpTools | None):
 
 # ---------------------------------------------------------------- driver
 
+def check_eval_frozen():
+    """The formal set must be byte-identical to when it was frozen."""
+    from bench.generate import file_sha256
+    expected = (DATA_DIR / "eval.sha256").read_text().strip()
+    if file_sha256(DATA_DIR / "eval.jsonl") != expected:
+        raise SystemExit("data/eval.jsonl doesn't match data/eval.sha256 - the frozen eval set was modified.")
+
+
 def load_questions(args):
-    questions = [json.loads(line) for line in QUESTIONS_PATH.open(encoding="utf-8")]
+    if args.set == "eval":
+        check_eval_frozen()
+    questions = [json.loads(line) for line in (DATA_DIR / f"{args.set}.jsonl").open(encoding="utf-8")]
     if args.suite:
         questions = [q for q in questions if q["suite"] in args.suite]
     if args.ids:
@@ -209,7 +234,7 @@ async def run_arm(client, args, arm, questions, out_path):
         async def one(q, repeat):
             async with sem:
                 started = time.monotonic()
-                rec = {"id": q["id"], "suite": q["suite"], "arm": arm, "model": args.model,
+                rec = {"id": q["id"], "set": args.set, "suite": q["suite"], "arm": arm, "model": args.model,
                        "effort": args.effort, "repeat": repeat}
                 try:
                     rec.update(await ask(client, args, arm, q, tools))
@@ -230,7 +255,10 @@ async def run_arm(client, args, arm, questions, out_path):
                         print(f"[{arm}] {n}/{len(jobs)} ({counts['error']} errors)"
                               + (f" - {q['id']}: {rec['error']}" if rec["error"] else ""))
 
-        await asyncio.gather(*(one(q, r) for q, r in jobs))
+        # One call first so the shared tools+system cache exists before the
+        # parallel batch - otherwise every concurrent first call writes it.
+        await one(*jobs[0])
+        await asyncio.gather(*(one(q, r) for q, r in jobs[1:]))
 
 
 async def dry_run(args, questions):
@@ -252,7 +280,9 @@ async def dry_run(args, questions):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--serve-offline-mcp", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--run", default="default", help="results go to bench/results/<run>/")
+    parser.add_argument("--set", choices=["dev", "eval"], default="dev",
+                        help="dev for debugging; eval is the frozen formal set and only runs in full")
+    parser.add_argument("--run", default="default", help="results go to bench/results/<set>/<run>/")
     parser.add_argument("--arm", choices=["claude", "mcp", "both"], default="both")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--effort", choices=["low", "medium", "high", "xhigh", "max"],
@@ -269,12 +299,15 @@ def main():
     if args.serve_offline_mcp:
         return serve_offline_mcp()
 
+    if args.set == "eval" and not args.dry_run and (args.suite or args.ids or args.limit or args.repeats):
+        parser.error("eval only runs in full - debug with --set dev instead of filtering eval")
+
     load_dotenv(ROOT / ".env")
     questions = load_questions(args)
     if args.dry_run:
         return asyncio.run(dry_run(args, questions))
 
-    run_dir = RESULTS_DIR / args.run
+    run_dir = RESULTS_DIR / args.set / args.run
     run_dir.mkdir(parents=True, exist_ok=True)
     client = anthropic.AsyncAnthropic()
     arms = ["claude", "mcp"] if args.arm == "both" else [args.arm]

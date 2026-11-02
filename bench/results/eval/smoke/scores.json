@@ -14,6 +14,8 @@
       "cache_read_input_tokens": 0,
       "cache_creation_input_tokens": 0
     },
+    "cache_read_share": 0.0,
+    "est_cost_usd": 0.2798,
     "accuracy": {
       "day_pillar": {
         "n": 1,
@@ -36,16 +38,60 @@
     },
     "stability": {
       "groups": 1,
-      "repeat_agreement": 0.6666666666666666,
-      "wording_agreement": 0.5,
-      "field_agreement": {
-        "day_pillar": 0.5,
-        "day_master_element": 0.5,
-        "strength": 0.5,
-        "favorable_elements": 0.5,
-        "unfavorable_elements": 0.5
+      "rows": {
+        "core_repeated_ask": {
+          "agreement": 0.6666666666666666,
+          "gold_match": 0.6666666666666666,
+          "answers": 3
+        },
+        "core_different_wordings": {
+          "agreement": 0.5,
+          "gold_match": 0.5,
+          "answers": 2
+        },
+        "core_all_answers": {
+          "agreement": 0.5,
+          "gold_match": 0.5,
+          "answers": 4
+        },
+        "chart_facts": {
+          "agreement": 0.5,
+          "gold_match": 0.5,
+          "answers": 4
+        },
+        "method_verdict": {
+          "agreement": 0.5,
+          "gold_match": 0.5,
+          "answers": 4
+        },
+        "method_verdict_given_chart_right": {
+          "agreement": 1.0,
+          "gold_match": 1.0,
+          "answers": 2
+        }
       },
-      "core_matches_gold": 0.5
+      "fields": {
+        "day_pillar": {
+          "agreement": 0.5,
+          "gold_match": 0.5
+        },
+        "day_master_element": {
+          "agreement": 0.5,
+          "gold_match": 0.5
+        },
+        "strength": {
+          "agreement": 0.5,
+          "gold_match": 0.5
+        },
+        "favorable_elements": {
+          "agreement": 0.5,
+          "gold_match": 0.5
+        },
+        "unfavorable_elements": {
+          "agreement": 0.5,
+          "gold_match": 0.5
+        }
+      }
     },
     "interactions": {
       "pillars": {
@@ -188,6 +234,8 @@
       "cache_read_input_tokens": 0,
       "cache_creation_input_tokens": 0
     },
+    "cache_read_share": 0.0,
+    "est_cost_usd": 0.6969,
     "accuracy": {
       "day_pillar": {
         "n": 1,
@@ -210,16 +258,60 @@
     },
     "stability": {
       "groups": 1,
-      "repeat_agreement": 1.0,
-      "wording_agreement": 1.0,
-      "field_agreement": {
-        "day_pillar": 1.0,
-        "day_master_element": 1.0,
-        "strength": 1.0,
-        "favorable_elements": 1.0,
-        "unfavorable_elements": 1.0
+      "rows": {
+        "core_repeated_ask": {
+          "agreement": 1.0,
+          "gold_match": 1.0,
+          "answers": 3
+        },
+        "core_different_wordings": {
+          "agreement": 1.0,
+          "gold_match": 1.0,
+          "answers": 2
+        },
+        "core_all_answers": {
+          "agreement": 1.0,
+          "gold_match": 1.0,
+          "answers": 4
+        },
+        "chart_facts": {
+          "agreement": 1.0,
+          "gold_match": 1.0,
+          "answers": 4
+        },
+        "method_verdict": {
+          "agreement": 1.0,
+          "gold_match": 1.0,
+          "answers": 4
+        },
+        "method_verdict_given_chart_right": {
+          "agreement": 1.0,
+          "gold_match": 1.0,
+          "answers": 4
+        }
       },
-      "core_matches_gold": 1.0
+      "fields": {
+        "day_pillar": {
+          "agreement": 1.0,
+          "gold_match": 1.0
+        },
+        "day_master_element": {
+          "agreement": 1.0,
+          "gold_match": 1.0
+        },
+        "strength": {
+          "agreement": 1.0,
+          "gold_match": 1.0
+        },
+        "favorable_elements": {
+          "agreement": 1.0,
+          "gold_match": 1.0
+        },
+        "unfavorable_elements": {
+          "agreement": 1.0,
+          "gold_match": 1.0
+        }
+      }
     },
     "interactions": {
       "birth": {

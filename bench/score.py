@@ -1,4 +1,4 @@
-"""Scores a runner.py run against the gold answers in data/questions.jsonl.
+"""Scores a runner.py run against the gold answers in data/<set>.jsonl.
 
 Per suite:
 
@@ -7,11 +7,13 @@ Per suite:
                 plus a partial-credit fraction). Also sliced by
                 tst_changes_chart, since those charts are only right with
                 true-solar-time correction.
-- stability:    per chart, how often the model gives the same core answer
-                (day pillar, DM element, strength, favorable/unfavorable
-                elements). Split into repeat consistency (canonical wording,
-                re-asked) and wording consistency (different asks, first
-                repeat), plus whether the core matches gold.
+- stability:    the core answer (day pillar, DM element, strength,
+                favorable/unfavorable elements), every row scored two ways
+                and always shown together: agreement (does the model give the
+                same answer each time - same ask repeated, different
+                wordings) and gold match (is that answer right). The core is
+                also split into chart facts (objectively checkable) and the
+                method verdict (agreement with this engine's 扶抑 method).
 - interactions: set F1 over normalized interaction keys ("clash:子-午").
                 A chart with no interactions scores 1.0 only if the model
                 also lists none - so inventing interactions is penalized.
@@ -20,7 +22,7 @@ A reply whose final JSON can't be parsed counts as wrong (and is reported
 as a parse failure). Calls that errored are excluded and reported - re-run
 runner.py with the same --run to retry them.
 
-Run from the repo root:  python -m bench.score --run smoke
+Run from the repo root:  python -m bench.score --run try1 [--set eval] [--failures]
 """
 import argparse
 import json
@@ -29,10 +31,20 @@ from pathlib import Path
 
 from bench.generate import BRANCH_ORDER
 
-QUESTIONS_PATH = Path(__file__).parent / "data" / "questions.jsonl"
+DATA_DIR = Path(__file__).parent / "data"
 RESULTS_DIR = Path(__file__).parent / "results"
 
 STEMS = "甲乙丙丁戊己庚辛壬癸"
+
+# $ per million tokens: (input, output, cache read, 5-minute cache write).
+# First-party list prices as of 2026-10 - an estimate for budgeting, not a bill.
+PRICES = {
+    "claude-opus-5-5": (4.00, 20.00, 0.20, 5.00),
+    "claude-sonnet-5-5": (2.00, 10.00, 0.20, 2.50),
+    "claude-haiku-4-5": (1.00, 5.00, 0.10, 1.25),
+    # Prompts up to 100K tokens; cache rates assumed at the usual 0.1x / 1.25x.
+    "claude-haiku-5-5": (0.10, 0.50, 0.01, 0.125),
+}
 
 TEN_GOD_ALIASES = {
     "Friend": ["friend", "companion", "parallel", "比肩"],
@@ -228,27 +240,57 @@ def score_stability(rows):
         counts = Counter(c for c in cores if c is not None)
         return (counts.most_common(1)[0][1] if counts else 0) / len(cores)
 
-    repeat, wording, field_agree, gold_match = [], [], defaultdict(list), []
+    # Each row is scored both ways - agreement (self-consistency, per chart)
+    # and gold match (per answer) - and the two are always reported together:
+    # a model can be consistently wrong, or right but erratic.
+    # Chart facts are objectively checkable; the method verdict only measures
+    # agreement with this engine's 扶抑 weighting and "balanced" threshold, so
+    # it's also reported for answers whose chart facts were right, to separate
+    # method disagreement from chart errors.
+    project = {
+        "core": lambda c: c,
+        "chart_facts": lambda c: c[:2],
+        "method_verdict": lambda c: c[2:],
+    }
+    row_specs = {
+        # row name: (which answers in the chart's group, which part of the core)
+        "core_repeated_ask": ("canonical", "core"),
+        "core_different_wordings": ("first_repeats", "core"),
+        "core_all_answers": ("everything", "core"),
+        "chart_facts": ("everything", "chart_facts"),
+        "method_verdict": ("everything", "method_verdict"),
+        "method_verdict_given_chart_right": ("chart_right", "method_verdict"),
+    }
+    agree, match = defaultdict(list), defaultdict(list)
+    field_agree, field_match = defaultdict(list), defaultdict(list)
     for group in groups.values():
-        canonical = [core for q, rec, core in group if q["variant"] == group[0][0]["variant"] and q["repeats"] > 1]
-        first_repeats = [core for q, rec, core in group if rec["repeat"] == 0]
-        everything = [core for _, _, core in group]
-        if (a := agreement(canonical)) is not None:
-            repeat.append(a)
-        if (a := agreement(first_repeats)) is not None:
-            wording.append(a)
-        for i, name in enumerate(CORE_FIELDS):
-            if (a := agreement([c[i] if c else None for c in everything])) is not None:
-                field_agree[name].append(a)
         gold = gold_core(group[0][0]["gold"])
-        gold_match.extend(core == gold for core in everything)
+        everything = [core for _, _, core in group]
+        subsets = {
+            "canonical": [core for q, rec, core in group
+                          if q["variant"] == group[0][0]["variant"] and q["repeats"] > 1],
+            "first_repeats": [core for q, rec, core in group if rec["repeat"] == 0],
+            "everything": everything,
+            "chart_right": [c for c in everything if c and c[:2] == gold[:2]],
+        }
+        for row, (subset, part) in row_specs.items():
+            cores = subsets[subset]
+            projected = [project[part](c) if c else None for c in cores]
+            if (a := agreement(projected)) is not None:
+                agree[row].append(a)
+            match[row].extend(p == project[part](gold) for p in projected)
+        for i, name in enumerate(CORE_FIELDS):
+            values = [c[i] if c else None for c in everything]
+            if (a := agreement(values)) is not None:
+                field_agree[name].append(a)
+            field_match[name].extend(v == gold[i] for v in values)
 
     return {
         "groups": len(groups),
-        "repeat_agreement": mean(repeat),
-        "wording_agreement": mean(wording),
-        "field_agreement": {name: mean(v) for name, v in field_agree.items()},
-        "core_matches_gold": mean(gold_match),
+        "rows": {row: {"agreement": mean(agree[row]), "gold_match": mean(match[row]),
+                       "answers": len(match[row])} for row in row_specs},
+        "fields": {name: {"agreement": mean(field_agree[name]), "gold_match": mean(field_match[name])}
+                   for name in CORE_FIELDS},
     }
 
 
@@ -297,14 +339,92 @@ def score_interactions(rows):
 SUITE_SCORERS = {"accuracy": score_accuracy, "stability": score_stability, "interactions": score_interactions}
 
 
+# ---------------------------------------------------------------- failed cases
+
+def failure(q, parsed):
+    """Why this reply is wrong, as {field: (gold, predicted)} - or None if
+    it's right. Predictions are shown normalized, i.e. as the scorer saw them."""
+    if parsed is None:
+        return {"reply": ("final JSON object", "none found")}
+    if q["suite"] == "accuracy":
+        if grade_accuracy(q, parsed)["correct"]:
+            return None
+        gold = q["gold"]
+        if q["task"] == "day_pillar":
+            return {"day_pillar": (gold["day_pillar"], norm_pillar(parsed.get("day_pillar")) or parsed.get("day_pillar"))}
+        if q["task"] == "stem_ten_god":
+            return {"ten_god": (f"{gold['stem']} {gold['ten_god']}",
+                                f"{parsed.get('stem')} {norm_ten_god(parsed.get('ten_god')) or parsed.get('ten_god')}")}
+        predicted = [f"{h.get('stem')} {norm_ten_god(h.get('ten_god')) or h.get('ten_god')}"
+                     for h in parsed.get("hidden_stems") or [] if isinstance(h, dict)]
+        return {"hidden_stems": ([f"{h['stem']} {h['ten_god']}" for h in gold["hidden_stems"]], predicted)}
+    if q["suite"] == "stability":
+        core, gold = core_answer(parsed), gold_core(q["gold"])
+        show = lambda v: sorted(v) if isinstance(v, frozenset) else v
+        diffs = {name: (show(g), show(c)) for name, g, c in zip(CORE_FIELDS, gold, core) if g != c}
+        return diffs or None
+    gold = set(q["gold"]["keys"])
+    pred_list = parsed.get("interactions")
+    predicted = {k for k in map(norm_interaction_key, pred_list if isinstance(pred_list, list) else []) if k}
+    if predicted == gold:
+        return None
+    return {"missing": (sorted(gold - predicted), None), "invented": (None, sorted(predicted - gold))}
+
+
+def collect_failures(questions, path, suites=None):
+    out = []
+    for rec in latest_records(path).values():
+        if rec.get("error"):
+            continue
+        q = questions[rec["id"]]
+        if suites and q["suite"] not in suites:
+            continue
+        diffs = failure(q, parse_final_json(rec.get("response")))
+        if diffs:
+            out.append({"id": rec["id"], "arm": rec["arm"], "repeat": rec["repeat"], "suite": q["suite"],
+                        "task": q["task"], "variant": q["variant"], "input_mode": q["input_mode"],
+                        "tst_changes_chart": q["meta"]["tst_changes_chart"],
+                        "diffs": diffs, "tool_calls": [t["name"] for t in rec.get("tool_calls") or []],
+                        "question": q["question"], "response": rec.get("response")})
+    return out
+
+
+def print_failures(failures, limit):
+    print(f"\nfailed cases: {len(failures)}" + (f" (showing {limit})" if len(failures) > limit else ""))
+    for f in failures[:limit]:
+        tags = [f["task"], f["variant"] or f["input_mode"]]
+        if f["tst_changes_chart"]:
+            tags.append("TST-sensitive")
+        tools = ",".join(f["tool_calls"]) or "no tools"
+        print(f"[{f['arm']}] {f['id']} r{f['repeat']} ({', '.join(tags)}; {tools})")
+        for field, (gold, pred) in f["diffs"].items():
+            if field == "missing":
+                if gold:
+                    print(f"    missing   {gold}")
+            elif field == "invented":
+                if pred:
+                    print(f"    invented  {pred}")
+            else:
+                print(f"    {field:<20} gold {gold}  got {pred}")
+        # The reasoning just before the answer JSON says more than the JSON itself.
+        prose = [line for line in (f["response"] or "").strip().splitlines()
+                 if line.strip() and not line.lstrip().startswith(("{", "```"))]
+        print(f"    reply ends: {' / '.join(prose[-2:])[-200:]}")
+
+
 # ---------------------------------------------------------------- driver
 
-def score_arm(questions, path):
-    records = [json.loads(line) for line in path.open(encoding="utf-8")]
+def latest_records(path):
     # A resumed run can hold a failed attempt and its later retry - keep the latest.
     latest = {}
-    for rec in records:
+    for line in path.open(encoding="utf-8"):
+        rec = json.loads(line)
         latest[(rec["id"], rec["repeat"])] = rec
+    return latest
+
+
+def score_arm(questions, path):
+    latest = latest_records(path)
     errors = [r for r in latest.values() if r.get("error")]
     ok = [r for r in latest.values() if not r.get("error")]
 
@@ -318,8 +438,19 @@ def score_arm(questions, path):
         by_suite[q["suite"]].append((q, rec, parsed))
 
     usage = Counter()
+    cost = 0.0
+    # Errored calls can still have billed tokens, but they aren't recorded - so count ok calls only.
     for rec in ok:
-        usage.update(rec.get("usage") or {})
+        u = rec.get("usage") or {}
+        usage.update(u)
+        price = PRICES.get(rec.get("model"))
+        if price is None:
+            cost = None
+        elif cost is not None:
+            cost += (u.get("input_tokens", 0) * price[0] + u.get("output_tokens", 0) * price[1]
+                     + u.get("cache_read_input_tokens", 0) * price[2]
+                     + u.get("cache_creation_input_tokens", 0) * price[3]) / 1e6
+    total_input = sum(usage[k] for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
     report = {
         "calls": len(latest),
         "errors": len(errors),
@@ -328,6 +459,8 @@ def score_arm(questions, path):
         "avg_tool_calls": mean(len(r.get("tool_calls") or []) for r in ok),
         "avg_latency_s": mean(r["latency_s"] for r in ok),
         "tokens": dict(usage),
+        "cache_read_share": usage["cache_read_input_tokens"] / total_input if total_input else None,
+        "est_cost_usd": round(cost, 4) if cost is not None else None,
     }
     for suite, rows in by_suite.items():
         report[suite] = SUITE_SCORERS[suite](rows)
@@ -358,6 +491,11 @@ def print_summary(reports):
     row("parse failures", lambda r: sum(r["parse_failures"].values()))
     row("avg tool calls", lambda r: f"{r['avg_tool_calls']:.1f}")
     row("avg latency (s)", lambda r: f"{r['avg_latency_s']:.1f}")
+    row("input tokens / call", lambda r: round(sum(r["tokens"].get(k, 0) for k in (
+        "input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")) / (r["calls"] - r["errors"])))
+    row("output tokens / call", lambda r: round(r["tokens"].get("output_tokens", 0) / (r["calls"] - r["errors"])))
+    row("input read from cache", lambda r: r["cache_read_share"])
+    row("est. cost ($)", lambda r: f"{r['est_cost_usd']:.3f}")
 
     lines.append("accuracy")
     for task in ("day_pillar", "stem_ten_god", "hidden_stems", "all"):
@@ -366,12 +504,31 @@ def print_summary(reports):
     row("all, TST changes chart", lambda r: r["accuracy"]["all"]["accuracy_tst_changes_chart"])
     row("all, TST irrelevant", lambda r: r["accuracy"]["all"]["accuracy_tst_irrelevant"])
 
-    lines.append("stability")
-    row("repeat agreement", lambda r: r["stability"]["repeat_agreement"])
-    row("wording agreement", lambda r: r["stability"]["wording_agreement"])
-    for name in CORE_FIELDS:
-        row(f"  {name}", lambda r, n=name: r["stability"]["field_agreement"][n])
-    row("core matches gold", lambda r: r["stability"]["core_matches_gold"])
+    # Stability gets its own two-sided table: consistency and correctness side
+    # by side per row, so neither is read without the other.
+    def get(r, *keys):
+        try:
+            for k in keys:
+                r = r[k]
+            return r
+        except (KeyError, TypeError):
+            return None
+
+    span = 12 * len(arms)
+    lines.append(f"{'stability':<36}{'agrees with itself':>{span}}{'matches gold':>{span}}")
+    lines.append(f"  {'':<34}" + "".join(f"{a:>12}" for a in arms) * 2)
+    labels = {
+        "core_repeated_ask": "whole core, same ask repeated",
+        "core_different_wordings": "whole core, different wordings",
+        "core_all_answers": "whole core, all answers",
+        "chart_facts": "chart facts (pillar, DM element)",
+        "method_verdict": "method verdict (strength, elements)",
+        "method_verdict_given_chart_right": "  ...where chart facts were right",
+    }
+    for key, label in labels.items():
+        values = [get(reports[a], "stability", "rows", key, "agreement") for a in arms]
+        values += [get(reports[a], "stability", "rows", key, "gold_match") for a in arms]
+        lines.append(f"  {label:<34}" + "".join(f"{fmt(v):>12}" for v in values))
 
     lines.append("interactions")
     for mode in ("birth", "pillars", "all"):
@@ -386,19 +543,34 @@ def print_summary(reports):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--set", choices=["dev", "eval"], default="dev")
     parser.add_argument("--run", default="default")
+    parser.add_argument("--failures", action="store_true", help="list failed cases (all saved to failures.jsonl)")
+    parser.add_argument("--suite", nargs="+", choices=list(SUITE_SCORERS), help="limit --failures to these suites")
+    parser.add_argument("--arm", nargs="+", help="limit --failures to these arms")
+    parser.add_argument("--show", type=int, default=30, help="max failed cases to print")
     args = parser.parse_args()
 
-    run_dir = RESULTS_DIR / args.run
-    questions = {q["id"]: q for q in map(json.loads, QUESTIONS_PATH.open(encoding="utf-8"))}
-    reports = {path.stem: score_arm(questions, path) for path in sorted(run_dir.glob("*.jsonl"))}
+    run_dir = RESULTS_DIR / args.set / args.run
+    questions = {q["id"]: q for q in map(json.loads, (DATA_DIR / f"{args.set}.jsonl").open(encoding="utf-8"))}
+    arm_files = [p for p in sorted(run_dir.glob("*.jsonl")) if p.stem != "failures"]
+    reports = {path.stem: score_arm(questions, path) for path in arm_files}
     if not reports:
         raise SystemExit(f"no results in {run_dir}")
 
     (run_dir / "scores.json").write_text(json.dumps(reports, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"run: {args.run}")
+    print(f"set: {args.set}  run: {args.run}")
     print_summary(reports)
     print(f"\nfull report: {run_dir / 'scores.json'}")
+
+    if args.failures:
+        failures = [f for p in arm_files if not args.arm or p.stem in args.arm
+                    for f in collect_failures(questions, p, args.suite)]
+        with (run_dir / "failures.jsonl").open("w", encoding="utf-8") as out:
+            for f in failures:
+                out.write(json.dumps(f, ensure_ascii=False) + "\n")
+        print_failures(failures, args.show)
+        print(f"\nall failed cases, with full replies: {run_dir / 'failures.jsonl'}")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,9 @@
-"""Builds the benchmark question set as one JSONL file (bench/data/questions.jsonl).
+"""Builds the benchmark question sets (bench/data/<set>.jsonl).
+
+- eval: the formal set. Generated once and frozen - never regenerated or
+        edited; data/eval.sha256 lets runner.py refuse a modified copy.
+- dev:  ~25 records per suite for debugging prompts and scoring. Disposable
+        and regenerable; its charts never overlap eval's.
 
 Three suites share a single record schema (see `record()` below):
 
@@ -24,9 +29,10 @@ reproducible. Charts whose pillars change anywhere within +/-BOUNDARY_MINUTES
 of the true-solar birth time are rejected, so the small coordinate
 differences a live geocoder introduces at eval time can't flip the gold.
 
-Run from the repo root:  python -m bench.generate [--seed 7]
+Run from the repo root:  python -m bench.generate [--set dev] [--seed N]
 """
 import argparse
+import hashlib
 import json
 import random
 import subprocess
@@ -42,7 +48,7 @@ from core.bazi_math import (
 from core.bazi_interactions import find_branch_interactions
 from core.bazi_strength import analyze_day_master_strength
 
-OUT_PATH = Path(__file__).parent / "data" / "questions.jsonl"
+DATA_DIR = Path(__file__).parent / "data"
 SCHEMA_VERSION = 1
 BOUNDARY_MINUTES = 20
 
@@ -66,11 +72,18 @@ CITIES = {
 PILLARS = ("year", "month", "day", "hour")
 BRANCH_ORDER = "子丑寅卯辰巳午未申酉戌亥"
 
-ACCURACY_CHARTS = 30
-STABILITY_CHARTS = 10
 STABILITY_REPEATS = 3
-# interaction-count bucket -> number of charts (bucket 4 means "4 or more")
-INTERACTION_BUCKETS = {0: 6, 1: 8, 2: 10, 3: 8, 4: 8}
+
+# eval is the frozen formal set: generated once, never regenerated or edited
+# (data/eval.sha256 guards it). dev is small and disposable, for debugging
+# prompts and scoring; its charts are kept disjoint from eval's.
+# interaction_buckets: interaction-count bucket -> charts (4 means "4 or more").
+SETS = {
+    "eval": {"seed": 7, "id_prefix": "", "accuracy_charts": 30, "stability_charts": 10,
+             "interaction_buckets": {0: 6, 1: 8, 2: 10, 3: 8, 4: 8}},
+    "dev": {"seed": 11, "id_prefix": "dev-", "accuracy_charts": 8, "stability_charts": 5,
+            "interaction_buckets": {0: 2, 1: 2, 2: 3, 3: 3, 4: 2}},
+}
 
 
 def _stub_geocode(name, timeout=None):
@@ -123,12 +136,17 @@ def random_birth(rng):
         }
 
 
-def sample_charts(rng):
-    """Yields (birth, chart) pairs forever, skipping boundary-ambiguous ones."""
+def pillar_key(pillars):
+    return tuple(pillars[k] for k in PILLARS)
+
+
+def sample_charts(rng, exclude=frozenset()):
+    """Yields (birth, chart) pairs forever, skipping boundary-ambiguous ones
+    and any chart whose pillars are in `exclude`."""
     while True:
         birth = random_birth(rng)
         chart = build_chart(birth)
-        if chart:
+        if chart and pillar_key(chart["pillars"]) not in exclude:
             yield birth, chart
 
 
@@ -301,24 +319,24 @@ def interaction_records(charts):
     return out
 
 
-def pick_interaction_charts(stream):
+def pick_interaction_charts(stream, sizes):
     """Fills each interaction-count bucket, preferring charts that bring in an
     interaction type not yet covered so rarer types (punishment, full
     three-harmony) actually show up."""
-    buckets = {k: [] for k in INTERACTION_BUCKETS}
+    buckets = {k: [] for k in sizes}
     seen_types = set()
     for draw in range(20000):
-        if all(len(buckets[k]) >= n for k, n in INTERACTION_BUCKETS.items()):
+        if all(len(buckets[k]) >= n for k, n in sizes.items()):
             break
         birth, chart = next(stream)
         ixs = chart["branch_interactions"]
         k = min(len(ixs), 4)
-        if len(buckets[k]) >= INTERACTION_BUCKETS[k]:
+        if len(buckets[k]) >= sizes[k]:
             continue
         types = {(ix["type"], ix["note"] if ix["type"] in ("punishment", "three_harmony") else None) for ix in ixs}
         # For the first draws, hold each bucket's last two slots for charts
         # adding new coverage; after that, accept anything so buckets fill.
-        if draw < 3000 and k and not (types - seen_types) and len(buckets[k]) >= INTERACTION_BUCKETS[k] - 2:
+        if draw < 3000 and k and not (types - seen_types) and len(buckets[k]) >= sizes[k] - 2:
             continue
         seen_types |= types
         buckets[k].append((birth, chart))
@@ -332,40 +350,77 @@ def git_sha():
         return None
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--seed", type=int, default=7)
-    args = parser.parse_args()
+def set_path(name):
+    return DATA_DIR / f"{name}.jsonl"
 
-    rng = random.Random(args.seed)
+
+def file_sha256(path):
+    # Line endings normalized: git may check the file out as CRLF on Windows.
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
+def eval_pillar_keys():
+    """Pillars of every eval chart, so dev never reuses one."""
+    path = set_path("eval")
+    if not path.exists():
+        return frozenset()
+    births = {json.dumps(q["birth"], sort_keys=True) for q in map(json.loads, path.open(encoding="utf-8"))}
+    return frozenset(pillar_key(build_chart(json.loads(b))["pillars"]) for b in births)
+
+
+def build_records(name, seed=None):
+    cfg = SETS[name]
+    seed = cfg["seed"] if seed is None else seed
+    rng = random.Random(seed)
     time_engine.geolocator.geocode = _stub_geocode
-    stream = sample_charts(rng)
+    stream = sample_charts(rng, exclude=eval_pillar_keys() if name != "eval" else frozenset())
 
-    acc = [next(stream) for _ in range(ACCURACY_CHARTS)]
-    stab = [next(stream) for _ in range(STABILITY_CHARTS)]
-    inter = pick_interaction_charts(stream)
+    acc = [next(stream) for _ in range(cfg["accuracy_charts"])]
+    stab = [next(stream) for _ in range(cfg["stability_charts"])]
+    inter = pick_interaction_charts(stream, cfg["interaction_buckets"])
+
+    pre = cfg["id_prefix"]
 
     def ids(prefix, pairs):
-        return [(f"{prefix}{i:03d}", b, c) for i, (b, c) in enumerate(pairs)]
+        return [(f"{pre}{prefix}{i:03d}", b, c) for i, (b, c) in enumerate(pairs)]
 
     records = (
         accuracy_records(ids("a", acc), rng)
         + stability_records(ids("s", stab))
         + interaction_records(ids("i", inter))
     )
-    meta = {"schema_version": SCHEMA_VERSION, "seed": args.seed, "engine_commit": git_sha()}
+    meta = {"schema_version": SCHEMA_VERSION, "seed": seed, "engine_commit": git_sha()}
     counters = {}
     for rec in records:
         prefix = rec["suite"][:3]
         counters[prefix] = counters.get(prefix, 0) + 1
-        rec["id"] = f"{prefix}-{counters[prefix]:04d}"
+        rec["id"] = f"{pre}{prefix}-{counters[prefix]:04d}"
         rec["meta"].update(meta)
+    return records, counters
 
-    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with OUT_PATH.open("w", encoding="utf-8") as f:
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--set", choices=sorted(SETS), default="dev")
+    parser.add_argument("--seed", type=int, help="override the set's default seed (dev only)")
+    args = parser.parse_args()
+
+    path = set_path(args.set)
+    if args.set == "eval":
+        if path.exists():
+            raise SystemExit(f"{path} is frozen - eval is never regenerated. "
+                             f"Change dev instead, or start a new eval file deliberately.")
+        if args.seed is not None:
+            raise SystemExit("eval always uses its fixed seed")
+
+    records, counters = build_records(args.set, args.seed)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="\n") as f:
         for rec in records:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    print(f"wrote {len(records)} records to {OUT_PATH} ({counters})")
+    if args.set == "eval":
+        (DATA_DIR / "eval.sha256").write_text(file_sha256(path) + "\n")
+    print(f"wrote {len(records)} records to {path} ({counters})")
 
 
 if __name__ == "__main__":
