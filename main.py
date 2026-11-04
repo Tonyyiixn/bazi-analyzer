@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 # --- IMPORT OUR EXISTING ENGINES ---
-from core.time_engine import get_true_solar_time
+from core.time_engine import resolve_birth_time
 from core.bazi_math import calculate_bazi_chart, get_element_counts, calculate_chart_ten_gods, calculate_chart_hidden_stems
 from core.bazi_interactions import find_branch_interactions, find_stem_combinations, get_current_period
 from core.bazi_strength import analyze_day_master_strength
@@ -131,18 +131,22 @@ def calculate_bazi(request: BaziRequest,
         # Skip the correction when the hour is an AI-rectified estimate (a ~2hr
         # block, not a precise clock time) - true solar time math would just
         # add false precision on top of an already-approximate value.
+        solar_term_clock = None
         if request.skip_true_solar_time:
             adj_year, adj_month, adj_day, adj_hour, adj_minute = (
                 request.year, request.month, request.day, request.hour, request.minute
             )
         else:
-            adj_year, adj_month, adj_day, adj_hour, adj_minute = get_true_solar_time(
+            birth_time = resolve_birth_time(
                 request.year, request.month, request.day, request.hour, request.minute, request.city
             )
+            adj_year, adj_month, adj_day, adj_hour, adj_minute = birth_time["true_solar"]
+            solar_term_clock = birth_time["solar_term_clock"]
 
         # Step B: Math Engine
         pillars, da_yuns = calculate_bazi_chart(
-            adj_year, adj_month, adj_day, adj_hour, adj_minute, request.gender
+            adj_year, adj_month, adj_day, adj_hour, adj_minute, request.gender,
+            solar_term_clock=solar_term_clock,
         )
         elements = get_element_counts(pillars)
 

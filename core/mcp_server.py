@@ -6,7 +6,7 @@ instead of the backend pre-computing everything itself.
 """
 from mcp.server.fastmcp import FastMCP
 
-from core.time_engine import get_true_solar_time
+from core.time_engine import resolve_birth_time
 from core.bazi_math import (
     calculate_bazi_chart, get_element_counts, calculate_chart_ten_gods, calculate_chart_hidden_stems,
 )
@@ -38,10 +38,10 @@ def calculate_full_chart(year: int, month: int, day: int, hour: int, minute: int
 
     gender must be "Male" or "Female" (affects the Da Yun sequence direction).
     """
-    adj_year, adj_month, adj_day, adj_hour, adj_minute = get_true_solar_time(
-        year, month, day, hour, minute, city
-    )
-    pillars, da_yuns = calculate_bazi_chart(adj_year, adj_month, adj_day, adj_hour, adj_minute, gender)
+    birth_time = resolve_birth_time(year, month, day, hour, minute, city)
+    adj_year, adj_month, adj_day, adj_hour, adj_minute = birth_time["true_solar"]
+    pillars, da_yuns = calculate_bazi_chart(adj_year, adj_month, adj_day, adj_hour, adj_minute, gender,
+                                            solar_term_clock=birth_time["solar_term_clock"])
     elements = get_element_counts(pillars)
     ten_gods = calculate_chart_ten_gods(pillars)
     hidden_stems = calculate_chart_hidden_stems(pillars)

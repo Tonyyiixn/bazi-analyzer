@@ -23,24 +23,35 @@ def get_month_pillar(year, month, day):
     solar_date = Solar.fromYmdHms(year, month, day, 12, 0, 0)
     return solar_date.getLunar().getEightChar().getMonth()
 
-def calculate_bazi_chart(year, month, day, hour, minute, gender_input):
-    """Calculates the Four Pillars and Da Yun based on precise solar time."""
+def calculate_bazi_chart(year, month, day, hour, minute, gender_input, solar_term_clock=None):
+    """Calculates the Four Pillars and Da Yun based on precise solar time.
+
+    year..minute is local true solar time, which decides the day and hour
+    pillars. solar_term_clock is the same birth instant on Beijing standard
+    time (see time_engine.resolve_birth_time); when given, it decides the
+    year and month pillars and Da Yun timing, since lunar_python's solar
+    terms are on that clock. Without it, local solar time is used for all
+    four - only correct for births near UTC+8."""
     solar_date = Solar.fromYmdHms(year, month, day, hour, minute, 0)
     lunar_date = solar_date.getLunar()
     bazi = lunar_date.getEightChar()
-    
+    term_bazi = bazi
+    if solar_term_clock is not None:
+        term_bazi = Solar.fromYmdHms(*solar_term_clock, 0).getLunar().getEightChar()
+
     gender_code = 1 if gender_input in ["Male", "M"] else 0
-    
+
     # Extract the pillars
     pillars = {
-        "year": bazi.getYear(),
-        "month": bazi.getMonth(),
+        "year": term_bazi.getYear(),
+        "month": term_bazi.getMonth(),
         "day": bazi.getDay(),
         "hour": bazi.getTime()
     }
-    
-    # Extract the Da Yun (Luck Pillars)
-    yun = bazi.getYun(gender_code)
+
+    # Extract the Da Yun (Luck Pillars) - its direction and start age come
+    # from the year stem and the distance to the nearest solar term.
+    yun = term_bazi.getYun(gender_code)
     raw_da_yuns = yun.getDaYun()
     
     clean_da_yuns = []

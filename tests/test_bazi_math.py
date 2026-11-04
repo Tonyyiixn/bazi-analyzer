@@ -299,3 +299,20 @@ def test_regression_baseline_1995_08_24_1645_female():
     assert pillars == {"year": "乙亥", "month": "甲申", "day": "丁亥", "hour": "戊申"}
     assert da_yuns[0]["pillar"] == ""
     assert da_yuns[1]["pillar"] == "乙酉"
+
+
+# VERIFIED: 立春 2024 was 2024-02-04 16:27 Beijing time (08:27 UTC, 03:27 EST).
+# A New York birth at 06:00 EST is after it, so it's a 甲辰 year / 丙寅 month -
+# even though its local solar time (~05:50) is before 16:27 on the same date.
+def test_year_and_month_pillars_use_the_solar_term_clock_when_given():
+    local_solar = (2024, 2, 4, 5, 50)
+    pillars, _ = calculate_bazi_chart(*local_solar, "Male", solar_term_clock=(2024, 2, 4, 19, 0))
+    assert (pillars["year"], pillars["month"]) == ("甲辰", "丙寅")
+    # Day/hour still come from local solar time.
+    assert pillars["hour"][1] == "卯"
+
+
+def test_without_solar_term_clock_behaves_as_before():
+    with_clock, _ = calculate_bazi_chart(1990, 6, 15, 12, 0, "Male", solar_term_clock=(1990, 6, 15, 12, 0))
+    without, _ = calculate_bazi_chart(1990, 6, 15, 12, 0, "Male")
+    assert with_clock == without
