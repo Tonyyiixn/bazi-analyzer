@@ -1,0 +1,82 @@
+{
+  "engine": {
+    "calls": 30,
+    "errors": 0,
+    "parse_failures": {},
+    "stop_reasons": {
+      "engine": 30
+    },
+    "avg_tool_calls": 0.0,
+    "avg_latency_s": 0.03833333333333333,
+    "tokens": {},
+    "cache_read_share": null,
+    "est_cost_usd": 0.0,
+    "edge": {
+      "solar_term": {
+        "n": 5,
+        "focus_accuracy": 1.0,
+        "all_pillars_accuracy": 1.0,
+        "by_scenario": {
+          "大雪": 1.0,
+          "白露": 1.0,
+          "立夏": 1.0,
+          "立秋": 1.0,
+          "驚蟄": 1.0
+        }
+      },
+      "all": {
+        "n": 30,
+        "focus_accuracy": 1.0,
+        "all_pillars_accuracy": 1.0,
+        "by_scenario": null
+      },
+      "li_chun": {
+        "n": 5,
+        "focus_accuracy": 1.0,
+        "all_pillars_accuracy": 1.0,
+        "by_scenario": {
+          "立春": 1.0
+        }
+      },
+      "zi_hour": {
+        "n": 5,
+        "focus_accuracy": 1.0,
+        "all_pillars_accuracy": 1.0,
+        "by_scenario": {
+          "early_zi": 1.0,
+          "late_zi": 1.0
+        }
+      },
+      "time_zone": {
+        "n": 5,
+        "focus_accuracy": 1.0,
+        "all_pillars_accuracy": 1.0,
+        "by_scenario": {
+          "china_dst_1986_1991": 1.0,
+          "date_shift_past_midnight": 1.0,
+          "singapore_utc_0730": 1.0,
+          "us_summer_dst": 1.0
+        }
+      },
+      "equation_of_time": {
+        "n": 5,
+        "focus_accuracy": 1.0,
+        "all_pillars_accuracy": 1.0,
+        "by_scenario": {
+          "feb": 1.0,
+          "nov": 1.0
+        }
+      },
+      "leap_month": {
+        "n": 5,
+        "focus_accuracy": 1.0,
+        "all_pillars_accuracy": 1.0,
+        "by_scenario": {
+          "leap_3": 1.0,
+          "leap_4": 1.0,
+          "leap_5": 1.0
+        }
+      }
+    }
+  }
+}

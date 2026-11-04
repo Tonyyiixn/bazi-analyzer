@@ -36,8 +36,9 @@ import hashlib
 import json
 import random
 import subprocess
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from types import SimpleNamespace
 
 from core import time_engine
@@ -83,7 +84,12 @@ SETS = {
              "interaction_buckets": {0: 6, 1: 8, 2: 10, 3: 8, 4: 8}},
     "dev": {"seed": 11, "id_prefix": "dev-", "accuracy_charts": 8, "stability_charts": 5,
             "interaction_buckets": {0: 2, 1: 2, 2: 3, 3: 3, 4: 2}},
+    # The edge suite has its own pair of sets: its gold comes from
+    # bench/reference.py, not the engine (see edge_records below).
+    "edge-eval": {"seed": 23, "id_prefix": "", "edge_per_category": 10},
+    "edge-dev": {"seed": 21, "id_prefix": "dev-", "edge_per_category": 5},
 }
+FROZEN_SETS = {"eval", "edge-eval"}
 
 
 def _stub_geocode(name, timeout=None):
@@ -343,6 +349,239 @@ def pick_interaction_charts(stream, sizes):
     return [pair for k in sorted(buckets) for pair in buckets[k]]
 
 
+# ---------------------------------------------------------------- edge
+
+# city -> (latitude, longitude, IANA time zone). The reference converts clock
+# time with this zone; generation checks the engine's own zone lookup
+# (timezonefinder) agrees, so a disagreement there can't be what fails.
+EDGE_CITIES = {
+    "Beijing": (39.9042, 116.4074, "Asia/Shanghai"),
+    "Shanghai": (31.2304, 121.4737, "Asia/Shanghai"),
+    "Lhasa": (29.6520, 91.1721, "Asia/Shanghai"),        # Beijing time ~2h ahead of the sun
+    "Kunming": (25.0389, 102.7183, "Asia/Shanghai"),
+    "Hong Kong": (22.3193, 114.1694, "Asia/Hong_Kong"),
+    "Taipei": (25.0330, 121.5654, "Asia/Taipei"),
+    "Singapore": (1.3521, 103.8198, "Asia/Singapore"),   # UTC+7:30 until 1982
+    "Tokyo": (35.6762, 139.6503, "Asia/Tokyo"),
+    "Kolkata": (22.5726, 88.3639, "Asia/Kolkata"),
+    "Kathmandu": (27.7172, 85.3240, "Asia/Kathmandu"),   # UTC+5:45
+    "London": (51.5074, -0.1278, "Europe/London"),
+    "New York": (40.7128, -74.0060, "America/New_York"),
+    "Los Angeles": (34.0522, -118.2437, "America/Los_Angeles"),
+    "St. John's": (47.5615, -52.7126, "America/St_Johns"),  # UTC-3:30
+    "Sydney": (-33.8688, 151.2093, "Australia/Sydney"),
+    "Adelaide": (-34.9285, 138.6007, "Australia/Adelaide"),  # UTC+9:30
+    "Honolulu": (21.3069, -157.8583, "Pacific/Honolulu"),
+}
+CHINESE_CALENDAR_CITIES = ["Beijing", "Shanghai", "Hong Kong", "Taipei", "Singapore"]
+
+EDGE_CATEGORIES = ("solar_term", "li_chun", "zi_hour", "time_zone", "equation_of_time", "leap_month")
+
+ZI_CONVENTION = ("If the birth falls between 23:00 and 24:00 true solar time (late 子時), use the convention "
+                 "that keeps the current day's Day Pillar and takes the next day's stem for the Hour Pillar.")
+EDGE_FORMAT = (JSON_TAIL + '{"year_pillar": "<stem><branch>", "month_pillar": "<stem><branch>", '
+               '"day_pillar": "<stem><branch>", "hour_pillar": "<stem><branch>"}')
+
+# (scenario, cities, date picker) for the time_zone category: places and eras
+# where reading the clock as solar time puts the birth in the wrong hour.
+def _any_date(rng, start=1955, end=2020):
+    return date(start, 1, 1) + timedelta(days=rng.randrange((end - start + 1) * 365))
+
+
+TIME_ZONE_SCENARIOS = [
+    ("lhasa_beijing_time", ["Lhasa"], lambda rng: _any_date(rng)),
+    ("china_dst_1986_1991", ["Beijing", "Shanghai"],
+     lambda rng: date(rng.randint(1986, 1991), rng.choice([6, 7, 8]), rng.randint(1, 28))),
+    ("us_summer_dst", ["New York", "Los Angeles"], lambda rng: date(rng.randint(1960, 2020), 7, rng.randint(1, 28))),
+    ("singapore_utc_0730", ["Singapore"], lambda rng: _any_date(rng, 1955, 1981)),
+    ("adelaide_summer_dst", ["Adelaide"], lambda rng: date(rng.randint(1990, 2020), 1, rng.randint(1, 28))),
+    ("half_hour_offsets", ["St. John's", "Kathmandu", "Kolkata"], lambda rng: _any_date(rng, 1990, 2020)),
+    ("date_shift_past_midnight", ["Lhasa", "Kunming", "Los Angeles"], None),  # time picked separately
+]
+
+
+def _edge_ref(birth, equation_of_time=True):
+    from bench import reference
+    lat, lng, tz = EDGE_CITIES[birth["city"]]
+    return reference.pillars(birth["year"], birth["month"], birth["day"], birth["hour"], birth["minute"],
+                             tz, lng, equation_of_time)
+
+
+def _birth_at_utc(utc, city, gender):
+    local = utc.astimezone(ZoneInfo(EDGE_CITIES[city][2]))
+    return {"year": local.year, "month": local.month, "day": local.day, "hour": local.hour,
+            "minute": local.minute, "gender": gender, "city": city}
+
+
+def _utc_for_solar_time(solar, city):
+    """UTC instant at which local apparent solar time in `city` reads `solar`."""
+    from bench.reference import apparent_solar_time
+    lng = EDGE_CITIES[city][1]
+    utc = (solar - timedelta(hours=lng / 15)).replace(tzinfo=timezone.utc)
+    for _ in range(2):  # the equation of time barely moves within minutes
+        _, eot = apparent_solar_time(utc, lng)
+        utc = (solar - timedelta(hours=lng / 15, minutes=eot)).replace(tzinfo=timezone.utc)
+    return utc + timedelta(seconds=30)  # land mid-minute, so truncating to the minute stays on target
+
+
+def _hour_branch(h):
+    return ((h + 1) // 2) % 12
+
+
+def edge_candidate(category, rng):
+    """One candidate birth for `category`: (birth, scenario, focus pillars, extra meta)."""
+    from bench import reference
+    gender = rng.choice(["Male", "Female"])
+    city = rng.choice(sorted(EDGE_CITIES))
+
+    if category in ("solar_term", "li_chun"):
+        month_index = 0 if category == "li_chun" else rng.randint(1, 11)
+        jie = reference.find_jie(month_index, rng.randint(1955, 2024))
+        offset = rng.choice([-1, 1]) * rng.choice([20, 45, 90, 180, 360, 600])
+        birth = _birth_at_utc(jie + timedelta(minutes=offset, seconds=30), city, gender)
+        focus = ["year", "month"] if category == "li_chun" else ["month"]
+        return birth, reference.JIE[month_index], focus, {"minutes_from_jie": offset}
+
+    if category == "zi_hour":
+        d = _any_date(rng)
+        late = rng.random() < 0.5
+        solar = datetime(d.year, d.month, d.day, 23 if late else 0, rng.randint(5, 54))
+        birth = _birth_at_utc(_utc_for_solar_time(solar, city), city, gender)
+        return birth, "late_zi" if late else "early_zi", ["day", "hour"], {}
+
+    if category == "time_zone":
+        scenario, cities, pick_date = rng.choice(TIME_ZONE_SCENARIOS)
+        city = rng.choice(cities)
+        if pick_date is None:  # just past local midnight, so the solar date is the previous day
+            d = _any_date(rng)
+            birth = {"year": d.year, "month": d.month, "day": d.day, "hour": rng.choice([0, 1]),
+                     "minute": rng.randint(0, 59), "gender": gender, "city": city}
+            return birth, scenario, ["day", "hour"], {}
+        d = pick_date(rng)
+        birth = {"year": d.year, "month": d.month, "day": d.day, "hour": rng.randint(1, 22),
+                 "minute": rng.randint(0, 59), "gender": gender, "city": city}
+        return birth, scenario, ["hour"], {}
+
+    if category == "equation_of_time":
+        # Feb (sun ~14 min behind the clock) and Nov (~16 min ahead) - the only
+        # months where mean and apparent solar time can land in different
+        # hours with a few minutes' margin on both sides.
+        d = rng.choice([date(rng.randint(1955, 2020), 2, rng.randint(1, 20)),
+                        date(rng.randint(1955, 2020), 11, rng.randint(1, 15))])
+        lng = EDGE_CITIES[city][1]
+        _, eot = reference.apparent_solar_time(datetime(d.year, d.month, d.day, 12, tzinfo=timezone.utc), lng)
+        boundary = rng.choice(range(3, 22, 2))
+        nudge = rng.uniform(5, abs(eot) - 4)
+        solar = datetime(d.year, d.month, d.day, boundary) + timedelta(minutes=nudge if eot > 0 else -nudge)
+        birth = _birth_at_utc(_utc_for_solar_time(solar, city), city, gender)
+        return birth, "feb" if d.month == 2 else "nov", ["hour"], {"equation_of_time_min": round(eot, 1)}
+
+    if category == "leap_month":
+        from lunar_python import Lunar, LunarYear
+        city = rng.choice(CHINESE_CALENDAR_CITIES)
+        while True:
+            y = rng.randint(1955, 2023)
+            leap = LunarYear.fromYear(y).getLeapMonth()
+            if leap:
+                break
+        lunar = Lunar.fromYmd(y, -leap, rng.randint(1, 29))
+        solar = lunar.getSolar()
+        birth = {"year": solar.getYear(), "month": solar.getMonth(), "day": solar.getDay(),
+                 "hour": rng.randint(8, 20), "minute": rng.randint(0, 59), "gender": gender, "city": city}
+        lunar_text = f"lunar calendar: {y}年{lunar.getMonthInChinese()}月{lunar.getDayInChinese()}"
+        # The trap: reading the month pillar off the (leap) lunar month.
+        return birth, f"leap_{leap}", ["month"], {"lunar_date": lunar_text, "lunar_month": leap}
+
+    raise ValueError(category)
+
+
+def accept_edge(category, birth, focus, extra):
+    """Gold for a candidate, or None if it isn't a clean test of `category`:
+    every boundary that decides it must be at least MIN_MARGIN_MIN away, and
+    only the effect under test may change the answer."""
+    from bench.reference import MIN_MARGIN_MIN
+    gold = _edge_ref(birth)
+    mean = _edge_ref(birth, equation_of_time=False)
+    if gold is None or mean is None:  # nonexistent / repeated DST clock time
+        return None
+    m = gold["margins_min"]
+    if m["hour"] < MIN_MARGIN_MIN or m["day"] < MIN_MARGIN_MIN:
+        return None
+    if m["jie"] < (15 if category in ("solar_term", "li_chun") else 24 * 60):
+        return None
+
+    if category == "equation_of_time":
+        if mean["pillars"]["hour"] == gold["pillars"]["hour"] or mean["margins_min"]["hour"] < 3:
+            return None
+        if mean["pillars"]["day"] != gold["pillars"]["day"]:
+            return None
+    elif mean["pillars"] != gold["pillars"]:
+        return None  # the equation of time would also decide this case - not isolated
+
+    clock_branch = _hour_branch(birth["hour"])
+    solar = datetime.strptime(gold["solar_time"], "%Y-%m-%d %H:%M")
+    if category == "time_zone":
+        if "day" in focus and solar.date() == date(birth["year"], birth["month"], birth["day"]):
+            return None
+        if BRANCH_ORDER.index(gold["pillars"]["hour"][1]) == clock_branch:
+            return None  # reading the clock as solar time would still be right
+    if category == "leap_month":
+        lunar_branch = BRANCH_ORDER[(extra["lunar_month"] + 1) % 12]  # 正月 -> 寅
+        if gold["pillars"]["month"][1] == lunar_branch:
+            return None  # the lunar month happens to give the right answer
+    return gold, mean
+
+
+def edge_records(name, rng):
+    """Edge-case records: per category, cfg["edge_per_category"] births that
+    pass accept_edge, with gold from bench/reference.py."""
+    from timezonefinder import TimezoneFinder
+    tf = TimezoneFinder()
+    for city, (lat, lng, tz) in EDGE_CITIES.items():
+        engine_tz = tf.timezone_at(lng=lng, lat=lat)
+        if ZoneInfo(engine_tz).key != tz and engine_tz != tz:
+            raise SystemExit(f"{city}: engine resolves {engine_tz}, reference uses {tz}")
+
+    exclude = set()
+    if name != "edge-eval" and set_path("edge-eval").exists():
+        exclude = {json.dumps(q["birth"], sort_keys=True) for q in map(json.loads, set_path("edge-eval").open(encoding="utf-8"))}
+
+    out = []
+    n = SETS[name]["edge_per_category"]
+    for category in EDGE_CATEGORIES:
+        accepted = 0
+        for _ in range(5000):
+            if accepted >= n:
+                break
+            birth, scenario, focus, extra = edge_candidate(category, rng)
+            if json.dumps(birth, sort_keys=True) in exclude:
+                continue
+            result = accept_edge(category, birth, focus, extra)
+            if result is None:
+                continue
+            gold, mean = result
+            accepted += 1
+            exclude.add(json.dumps(birth, sort_keys=True))
+            who = birth_text(birth)
+            lunar = f" ({extra['lunar_date']})" if "lunar_date" in extra else ""
+            out.append({
+                "id": None, "suite": "edge", "task": category,
+                "chart_id": f"{SETS[name]['id_prefix']}e{len(out):03d}",
+                "input_mode": "birth", "birth": birth, "pillars_given": None,
+                "question": f"For a {who}{lunar}, what are the Four Pillars (year, month, day and hour) "
+                            f"of their Bazi chart? {ZI_CONVENTION}",
+                "answer_format": EDGE_FORMAT,
+                "gold": {"pillars": gold["pillars"], "focus": focus,
+                         "mean_solar_time_pillars": mean["pillars"],
+                         "reference": {k: v for k, v in gold.items() if k != "pillars"}},
+                "group_id": None, "variant": scenario, "repeats": 1,
+                "meta": {"category": category, "tst_changes_chart": True, **extra},
+            })
+        if accepted < n:
+            raise SystemExit(f"edge category {category}: only {accepted}/{n} clean cases found")
+    return out
+
+
 def git_sha():
     try:
         return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
@@ -372,27 +611,30 @@ def build_records(name, seed=None):
     cfg = SETS[name]
     seed = cfg["seed"] if seed is None else seed
     rng = random.Random(seed)
-    time_engine.geolocator.geocode = _stub_geocode
-    stream = sample_charts(rng, exclude=eval_pillar_keys() if name != "eval" else frozenset())
-
-    acc = [next(stream) for _ in range(cfg["accuracy_charts"])]
-    stab = [next(stream) for _ in range(cfg["stability_charts"])]
-    inter = pick_interaction_charts(stream, cfg["interaction_buckets"])
-
     pre = cfg["id_prefix"]
 
-    def ids(prefix, pairs):
-        return [(f"{pre}{prefix}{i:03d}", b, c) for i, (b, c) in enumerate(pairs)]
+    if "edge_per_category" in cfg:
+        records = edge_records(name, rng)
+    else:
+        time_engine.geolocator.geocode = _stub_geocode
+        stream = sample_charts(rng, exclude=eval_pillar_keys() if name != "eval" else frozenset())
 
-    records = (
-        accuracy_records(ids("a", acc), rng)
-        + stability_records(ids("s", stab))
-        + interaction_records(ids("i", inter))
-    )
+        acc = [next(stream) for _ in range(cfg["accuracy_charts"])]
+        stab = [next(stream) for _ in range(cfg["stability_charts"])]
+        inter = pick_interaction_charts(stream, cfg["interaction_buckets"])
+
+        def ids(prefix, pairs):
+            return [(f"{pre}{prefix}{i:03d}", b, c) for i, (b, c) in enumerate(pairs)]
+
+        records = (
+            accuracy_records(ids("a", acc), rng)
+            + stability_records(ids("s", stab))
+            + interaction_records(ids("i", inter))
+        )
     meta = {"schema_version": SCHEMA_VERSION, "seed": seed, "engine_commit": git_sha()}
     counters = {}
     for rec in records:
-        prefix = rec["suite"][:3]
+        prefix = "edge" if rec["suite"] == "edge" else rec["suite"][:3]
         counters[prefix] = counters.get(prefix, 0) + 1
         rec["id"] = f"{pre}{prefix}-{counters[prefix]:04d}"
         rec["meta"].update(meta)
@@ -406,20 +648,20 @@ def main():
     args = parser.parse_args()
 
     path = set_path(args.set)
-    if args.set == "eval":
+    if args.set in FROZEN_SETS:
         if path.exists():
-            raise SystemExit(f"{path} is frozen - eval is never regenerated. "
-                             f"Change dev instead, or start a new eval file deliberately.")
+            raise SystemExit(f"{path} is frozen - {args.set} is never regenerated. "
+                             f"Change the dev set instead, or start a new eval file deliberately.")
         if args.seed is not None:
-            raise SystemExit("eval always uses its fixed seed")
+            raise SystemExit(f"{args.set} always uses its fixed seed")
 
     records, counters = build_records(args.set, args.seed)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="\n") as f:
         for rec in records:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    if args.set == "eval":
-        (DATA_DIR / "eval.sha256").write_text(file_sha256(path) + "\n")
+    if args.set in FROZEN_SETS:
+        (DATA_DIR / f"{args.set}.sha256").write_text(file_sha256(path) + "\n", newline="\n")
     print(f"wrote {len(records)} records to {path} ({counters})")
 
 

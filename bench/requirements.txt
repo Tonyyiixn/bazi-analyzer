@@ -1,0 +1,4 @@
+# Extra dependencies for bench/ only (the app doesn't need them):
+# install with  pip install -r requirements.txt -r bench/requirements.txt
+ephem==4.2.1    # reference.py: solar-term instants and the equation of time
+tzdata==2026.6  # zoneinfo's time-zone database on Windows

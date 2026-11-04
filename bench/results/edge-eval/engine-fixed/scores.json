@@ -1,0 +1,88 @@
+{
+  "engine": {
+    "calls": 60,
+    "errors": 0,
+    "parse_failures": {},
+    "stop_reasons": {
+      "engine": 60
+    },
+    "avg_tool_calls": 0.0,
+    "avg_latency_s": 0.022500000000000003,
+    "tokens": {},
+    "cache_read_share": null,
+    "est_cost_usd": 0.0,
+    "edge": {
+      "solar_term": {
+        "n": 10,
+        "focus_accuracy": 1.0,
+        "all_pillars_accuracy": 1.0,
+        "by_scenario": {
+          "大雪": 1.0,
+          "寒露": 1.0,
+          "清明": 1.0,
+          "立夏": 1.0,
+          "芒種": 1.0,
+          "驚蟄": 1.0
+        }
+      },
+      "all": {
+        "n": 60,
+        "focus_accuracy": 1.0,
+        "all_pillars_accuracy": 1.0,
+        "by_scenario": null
+      },
+      "li_chun": {
+        "n": 10,
+        "focus_accuracy": 1.0,
+        "all_pillars_accuracy": 1.0,
+        "by_scenario": {
+          "立春": 1.0
+        }
+      },
+      "zi_hour": {
+        "n": 10,
+        "focus_accuracy": 1.0,
+        "all_pillars_accuracy": 1.0,
+        "by_scenario": {
+          "early_zi": 1.0,
+          "late_zi": 1.0
+        }
+      },
+      "time_zone": {
+        "n": 10,
+        "focus_accuracy": 1.0,
+        "all_pillars_accuracy": 1.0,
+        "by_scenario": {
+          "adelaide_summer_dst": 1.0,
+          "date_shift_past_midnight": 1.0,
+          "half_hour_offsets": 1.0,
+          "lhasa_beijing_time": 1.0,
+          "singapore_utc_0730": 1.0,
+          "us_summer_dst": 1.0
+        }
+      },
+      "equation_of_time": {
+        "n": 10,
+        "focus_accuracy": 1.0,
+        "all_pillars_accuracy": 1.0,
+        "by_scenario": {
+          "feb": 1.0,
+          "nov": 1.0
+        }
+      },
+      "leap_month": {
+        "n": 10,
+        "focus_accuracy": 1.0,
+        "all_pillars_accuracy": 1.0,
+        "by_scenario": {
+          "leap_2": 1.0,
+          "leap_3": 1.0,
+          "leap_4": 1.0,
+          "leap_5": 1.0,
+          "leap_6": 1.0,
+          "leap_8": 1.0
+        }
+      }
+    }
+  }
+}

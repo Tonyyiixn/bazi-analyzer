@@ -61,28 +61,44 @@ ARM_SYSTEM = {
 
 # ---------------------------------------------------------------- MCP server
 
-def serve_offline_mcp():
-    """Entry point for the MCP subprocess in offline-geocoding mode: the
-    production server with its geocoder answering from generate.py's city
-    table. Unknown city names still go to the real geocoder, so a model
-    writing "Hong Kong, China" or "香港" isn't penalized."""
-    from bench.generate import CITIES
+def install_offline_geocoder():
+    """Points the engine's geocoder at generate.py's city tables (the same
+    coordinates the gold was built from). Unknown city names still go to the
+    real geocoder, so a model writing "Hong Kong, China" isn't penalized."""
+    from bench.generate import CITIES, EDGE_CITIES
     from core import time_engine
-    from core.mcp_server import mcp
     from types import SimpleNamespace
 
     live_geocode = time_engine.geolocator.geocode
-    by_name = {name.lower(): coords for name, coords in CITIES.items()}
+    coords = {name.lower(): latlng for name, latlng in CITIES.items()}
+    coords.update({name.lower(): (lat, lng) for name, (lat, lng, _tz) in EDGE_CITIES.items()})
 
     def geocode(query, timeout=None):
         q = query.lower()
-        for name, (lat, lng) in by_name.items():
+        for name, (lat, lng) in coords.items():
             if name in q:
                 return SimpleNamespace(latitude=lat, longitude=lng)
         return live_geocode(query, timeout=timeout)
 
     time_engine.geolocator.geocode = geocode
+
+
+def serve_offline_mcp():
+    """Entry point for the MCP subprocess in offline-geocoding mode."""
+    install_offline_geocoder()
+    from core.mcp_server import mcp
     mcp.run()
+
+
+def ask_engine(q):
+    """The engine arm: no model at all - the MCP tool's own function called
+    directly on the birth data, answered in the question's format. Only
+    meaningful for the edge suite, whose gold doesn't come from the engine."""
+    from core.mcp_server import calculate_full_chart
+    pillars = calculate_full_chart(**q["birth"])["pillars"]
+    answer = {f"{k}_pillar": pillars[k] for k in ("year", "month", "day", "hour")}
+    return {"response": json.dumps(answer, ensure_ascii=False), "stop_reason": "engine",
+            "tool_calls": [], "usage": {}}
 
 
 class McpTools:
@@ -177,17 +193,18 @@ async def ask(client, args, arm, q, tools: McpTools | None):
 
 # ---------------------------------------------------------------- driver
 
-def check_eval_frozen():
-    """The formal set must be byte-identical to when it was frozen."""
+def check_frozen(name):
+    """A formal set must be byte-identical to when it was frozen."""
     from bench.generate import file_sha256
-    expected = (DATA_DIR / "eval.sha256").read_text().strip()
-    if file_sha256(DATA_DIR / "eval.jsonl") != expected:
-        raise SystemExit("data/eval.jsonl doesn't match data/eval.sha256 - the frozen eval set was modified.")
+    expected = (DATA_DIR / f"{name}.sha256").read_text().strip()
+    if file_sha256(DATA_DIR / f"{name}.jsonl") != expected:
+        raise SystemExit(f"data/{name}.jsonl doesn't match data/{name}.sha256 - the frozen set was modified.")
 
 
 def load_questions(args):
-    if args.set == "eval":
-        check_eval_frozen()
+    from bench.generate import FROZEN_SETS
+    if args.set in FROZEN_SETS:
+        check_frozen(args.set)
     questions = [json.loads(line) for line in (DATA_DIR / f"{args.set}.jsonl").open(encoding="utf-8")]
     if args.suite:
         questions = [q for q in questions if q["suite"] in args.suite]
@@ -213,6 +230,10 @@ def load_done(path):
 
 
 async def run_arm(client, args, arm, questions, out_path):
+    if arm == "engine":
+        questions = [q for q in questions if q["suite"] == "edge"]
+        if not args.live_geocode:
+            install_offline_geocoder()
     done = load_done(out_path)
     jobs = [
         (q, r) for q in questions
@@ -234,10 +255,11 @@ async def run_arm(client, args, arm, questions, out_path):
         async def one(q, repeat):
             async with sem:
                 started = time.monotonic()
-                rec = {"id": q["id"], "set": args.set, "suite": q["suite"], "arm": arm, "model": args.model,
-                       "effort": args.effort, "repeat": repeat}
+                rec = {"id": q["id"], "set": args.set, "suite": q["suite"], "arm": arm,
+                       "model": "engine" if arm == "engine" else args.model,
+                       "effort": None if arm == "engine" else args.effort, "repeat": repeat}
                 try:
-                    rec.update(await ask(client, args, arm, q, tools))
+                    rec.update(ask_engine(q) if arm == "engine" else await ask(client, args, arm, q, tools))
                     rec["error"] = None
                 except (anthropic.AuthenticationError, anthropic.PermissionDeniedError, anthropic.NotFoundError):
                     raise  # bad key or model name: every other call would fail the same way
@@ -280,14 +302,16 @@ async def dry_run(args, questions):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--serve-offline-mcp", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--set", choices=["dev", "eval"], default="dev",
-                        help="dev for debugging; eval is the frozen formal set and only runs in full")
+    parser.add_argument("--set", choices=["dev", "eval", "edge-dev", "edge-eval"], default="dev",
+                        help="dev sets are for debugging; eval and edge-eval are frozen and only run in full")
     parser.add_argument("--run", default="default", help="results go to bench/results/<set>/<run>/")
-    parser.add_argument("--arm", choices=["claude", "mcp", "both"], default="both")
+    parser.add_argument("--arm", choices=["claude", "mcp", "engine", "both", "all"],
+                        help="both = claude + mcp; all adds the engine arm (free, edge suite only). "
+                             "Default: all for edge sets, both otherwise")
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--effort", choices=["low", "medium", "high", "xhigh", "max"],
                         help="omit to use the model's default")
-    parser.add_argument("--suite", nargs="+", choices=["accuracy", "stability", "interactions"])
+    parser.add_argument("--suite", nargs="+", choices=["accuracy", "stability", "interactions", "edge"])
     parser.add_argument("--ids", nargs="+")
     parser.add_argument("--limit", type=int, help="first N questions per suite")
     parser.add_argument("--repeats", type=int, help="override every question's repeat count")
@@ -299,8 +323,9 @@ def main():
     if args.serve_offline_mcp:
         return serve_offline_mcp()
 
-    if args.set == "eval" and not args.dry_run and (args.suite or args.ids or args.limit or args.repeats):
-        parser.error("eval only runs in full - debug with --set dev instead of filtering eval")
+    from bench.generate import FROZEN_SETS
+    if args.set in FROZEN_SETS and not args.dry_run and (args.suite or args.ids or args.limit or args.repeats):
+        parser.error(f"{args.set} only runs in full - debug with a dev set instead of filtering it")
 
     load_dotenv(ROOT / ".env")
     questions = load_questions(args)
@@ -310,7 +335,8 @@ def main():
     run_dir = RESULTS_DIR / args.set / args.run
     run_dir.mkdir(parents=True, exist_ok=True)
     client = anthropic.AsyncAnthropic()
-    arms = ["claude", "mcp"] if args.arm == "both" else [args.arm]
+    arm = args.arm or ("all" if args.set.startswith("edge") else "both")
+    arms = {"both": ["claude", "mcp"], "all": ["engine", "claude", "mcp"]}.get(arm, [arm])
 
     async def all_arms():
         for arm in arms:

@@ -44,6 +44,7 @@ PRICES = {
     "claude-haiku-4-5": (1.00, 5.00, 0.10, 1.25),
     # Prompts up to 100K tokens; cache rates assumed at the usual 0.1x / 1.25x.
     "claude-haiku-5-5": (0.10, 0.50, 0.01, 0.125),
+    "engine": (0.0, 0.0, 0.0, 0.0),  # the engine arm makes no API calls
 }
 
 TEN_GOD_ALIASES = {
@@ -336,7 +337,36 @@ def score_interactions(rows):
     return report
 
 
-SUITE_SCORERS = {"accuracy": score_accuracy, "stability": score_stability, "interactions": score_interactions}
+def edge_pillars(parsed):
+    return {k: norm_pillar(parsed.get(f"{k}_pillar")) for k in ("year", "month", "day", "hour")}
+
+
+def score_edge(rows):
+    """Per category: is every focus pillar (the one the edge decides) right,
+    and are all four right. Gold is bench/reference.py, not the engine."""
+    graded = defaultdict(list)
+    for q, rec, parsed in rows:
+        got = edge_pillars(parsed) if parsed else {}
+        gold = q["gold"]["pillars"]
+        result = (all(got.get(p) == gold[p] for p in q["gold"]["focus"]), got == gold)
+        graded[q["task"]].append((q, result))
+        graded["all"].append((q, result))
+    report = {}
+    for category, items in graded.items():
+        by_scenario = defaultdict(list)
+        for q, (focus_ok, _) in items:
+            by_scenario[q["variant"]].append(focus_ok)
+        report[category] = {
+            "n": len(items),
+            "focus_accuracy": mean(f for _, (f, _) in items),
+            "all_pillars_accuracy": mean(a for _, (_, a) in items),
+            "by_scenario": {s: mean(v) for s, v in sorted(by_scenario.items())} if category != "all" else None,
+        }
+    return report
+
+
+SUITE_SCORERS = {"accuracy": score_accuracy, "stability": score_stability, "interactions": score_interactions,
+                 "edge": score_edge}
 
 
 # ---------------------------------------------------------------- failed cases
@@ -363,6 +393,15 @@ def failure(q, parsed):
         show = lambda v: sorted(v) if isinstance(v, frozenset) else v
         diffs = {name: (show(g), show(c)) for name, g, c in zip(CORE_FIELDS, gold, core) if g != c}
         return diffs or None
+    if q["suite"] == "edge":
+        gold, focus, got = q["gold"]["pillars"], q["gold"]["focus"], edge_pillars(parsed)
+        if all(got[p] == gold[p] for p in focus):
+            return None
+        diffs = {f"{p} pillar" + (" (focus)" if p in focus else ""): (gold[p], got[p])
+                 for p in ("year", "month", "day", "hour") if got[p] != gold[p]}
+        ref = q["gold"]["reference"]
+        diffs["true / mean solar time"] = (ref["solar_time"], ref["mean_solar_time"])
+        return diffs
     gold = set(q["gold"]["keys"])
     pred_list = parsed.get("interactions")
     predicted = {k for k in map(norm_interaction_key, pred_list if isinstance(pred_list, list) else []) if k}
@@ -393,7 +432,7 @@ def print_failures(failures, limit):
     print(f"\nfailed cases: {len(failures)}" + (f" (showing {limit})" if len(failures) > limit else ""))
     for f in failures[:limit]:
         tags = [f["task"], f["variant"] or f["input_mode"]]
-        if f["tst_changes_chart"]:
+        if f["tst_changes_chart"] and f["suite"] != "edge":  # every edge case depends on solar time
             tags.append("TST-sensitive")
         tools = ",".join(f["tool_calls"]) or "no tools"
         print(f"[{f['arm']}] {f['id']} r{f['repeat']} ({', '.join(tags)}; {tools})")
@@ -404,12 +443,15 @@ def print_failures(failures, limit):
             elif field == "invented":
                 if pred:
                     print(f"    invented  {pred}")
+            elif field == "true / mean solar time":
+                print(f"    {field:<22} {gold} / {pred[11:]}")
             else:
-                print(f"    {field:<20} gold {gold}  got {pred}")
+                print(f"    {field:<22} gold {gold}  got {pred}")
         # The reasoning just before the answer JSON says more than the JSON itself.
         prose = [line for line in (f["response"] or "").strip().splitlines()
                  if line.strip() and not line.lstrip().startswith(("{", "```"))]
-        print(f"    reply ends: {' / '.join(prose[-2:])[-200:]}")
+        if prose:
+            print(f"    reply ends: {' / '.join(prose[-2:])[-200:]}")
 
 
 # ---------------------------------------------------------------- driver
@@ -497,12 +539,15 @@ def print_summary(reports):
     row("input read from cache", lambda r: r["cache_read_share"])
     row("est. cost ($)", lambda r: f"{r['est_cost_usd']:.3f}")
 
-    lines.append("accuracy")
-    for task in ("day_pillar", "stem_ten_god", "hidden_stems", "all"):
-        row(f"{task}", lambda r, t=task: r["accuracy"][t]["accuracy"])
-    row("hidden_stems partial credit", lambda r: r["accuracy"]["hidden_stems"]["partial_credit"])
-    row("all, TST changes chart", lambda r: r["accuracy"]["all"]["accuracy_tst_changes_chart"])
-    row("all, TST irrelevant", lambda r: r["accuracy"]["all"]["accuracy_tst_irrelevant"])
+    present = {suite for r in reports.values() for suite in SUITE_SCORERS if suite in r}
+
+    if "accuracy" in present:
+        lines.append("accuracy")
+        for task in ("day_pillar", "stem_ten_god", "hidden_stems", "all"):
+            row(f"{task}", lambda r, t=task: r["accuracy"][t]["accuracy"])
+        row("hidden_stems partial credit", lambda r: r["accuracy"]["hidden_stems"]["partial_credit"])
+        row("all, TST changes chart", lambda r: r["accuracy"]["all"]["accuracy_tst_changes_chart"])
+        row("all, TST irrelevant", lambda r: r["accuracy"]["all"]["accuracy_tst_irrelevant"])
 
     # Stability gets its own two-sided table: consistency and correctness side
     # by side per row, so neither is read without the other.
@@ -514,36 +559,46 @@ def print_summary(reports):
         except (KeyError, TypeError):
             return None
 
-    span = 12 * len(arms)
-    lines.append(f"{'stability':<36}{'agrees with itself':>{span}}{'matches gold':>{span}}")
-    lines.append(f"  {'':<34}" + "".join(f"{a:>12}" for a in arms) * 2)
-    labels = {
-        "core_repeated_ask": "whole core, same ask repeated",
-        "core_different_wordings": "whole core, different wordings",
-        "core_all_answers": "whole core, all answers",
-        "chart_facts": "chart facts (pillar, DM element)",
-        "method_verdict": "method verdict (strength, elements)",
-        "method_verdict_given_chart_right": "  ...where chart facts were right",
-    }
-    for key, label in labels.items():
-        values = [get(reports[a], "stability", "rows", key, "agreement") for a in arms]
-        values += [get(reports[a], "stability", "rows", key, "gold_match") for a in arms]
-        lines.append(f"  {label:<34}" + "".join(f"{fmt(v):>12}" for v in values))
+    if "stability" in present:
+        span = 12 * len(arms)
+        lines.append(f"{'stability':<36}{'agrees with itself':>{span}}{'matches gold':>{span}}")
+        lines.append(f"  {'':<34}" + "".join(f"{a:>12}" for a in arms) * 2)
+        labels = {
+            "core_repeated_ask": "whole core, same ask repeated",
+            "core_different_wordings": "whole core, different wordings",
+            "core_all_answers": "whole core, all answers",
+            "chart_facts": "chart facts (pillar, DM element)",
+            "method_verdict": "method verdict (strength, elements)",
+            "method_verdict_given_chart_right": "  ...where chart facts were right",
+        }
+        for key, label in labels.items():
+            values = [get(reports[a], "stability", "rows", key, "agreement") for a in arms]
+            values += [get(reports[a], "stability", "rows", key, "gold_match") for a in arms]
+            lines.append(f"  {label:<34}" + "".join(f"{fmt(v):>12}" for v in values))
 
-    lines.append("interactions")
-    for mode in ("birth", "pillars", "all"):
-        row(f"macro F1 ({mode})", lambda r, m=mode: r["interactions"][m]["macro_f1"])
-    row("micro P / R (all)", lambda r: f"{r['interactions']['all']['micro_precision']:.0%}/"
-                                       f"{r['interactions']['all']['micro_recall']:.0%}")
-    row("invented on empty charts", lambda r: r["interactions"]["all"]["invented_on_empty_charts"])
-    for itype in INTERACTION_TYPES:
-        row(f"  recall {itype}", lambda r, t=itype: r["interactions"]["all"]["per_type"][t]["recall"])
+    if "interactions" in present:
+        lines.append("interactions")
+        for mode in ("birth", "pillars", "all"):
+            row(f"macro F1 ({mode})", lambda r, m=mode: r["interactions"][m]["macro_f1"])
+        row("micro P / R (all)", lambda r: f"{r['interactions']['all']['micro_precision']:.0%}/"
+                                           f"{r['interactions']['all']['micro_recall']:.0%}")
+        row("invented on empty charts", lambda r: r["interactions"]["all"]["invented_on_empty_charts"])
+        for itype in INTERACTION_TYPES:
+            row(f"  recall {itype}", lambda r, t=itype: r["interactions"]["all"]["per_type"][t]["recall"])
+
+    if "edge" in present:
+        lines.append("edge  (gold: independent reference; focus = the pillar the edge decides)")
+        categories = [c for c in ("solar_term", "li_chun", "zi_hour", "time_zone", "equation_of_time", "leap_month")
+                      if any(get(reports[a], "edge", c) for a in arms)]
+        for category in categories + ["all"]:
+            row(f"{category} focus pillar", lambda r, c=category: r["edge"][c]["focus_accuracy"])
+        row("all four pillars right", lambda r: r["edge"]["all"]["all_pillars_accuracy"])
     print("\n".join(lines))
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--set", choices=["dev", "eval"], default="dev")
+    parser.add_argument("--set", choices=["dev", "eval", "edge-dev", "edge-eval"], default="dev")
     parser.add_argument("--run", default="default")
     parser.add_argument("--failures", action="store_true", help="list failed cases (all saved to failures.jsonl)")
     parser.add_argument("--suite", nargs="+", choices=list(SUITE_SCORERS), help="limit --failures to these suites")
@@ -553,7 +608,9 @@ def main():
 
     run_dir = RESULTS_DIR / args.set / args.run
     questions = {q["id"]: q for q in map(json.loads, (DATA_DIR / f"{args.set}.jsonl").open(encoding="utf-8"))}
-    arm_files = [p for p in sorted(run_dir.glob("*.jsonl")) if p.stem != "failures"]
+    order = {"engine": 0, "claude": 1, "mcp": 2}
+    arm_files = sorted((p for p in run_dir.glob("*.jsonl") if p.stem != "failures"),
+                       key=lambda p: (order.get(p.stem, 9), p.stem))
     reports = {path.stem: score_arm(questions, path) for path in arm_files}
     if not reports:
         raise SystemExit(f"no results in {run_dir}")
