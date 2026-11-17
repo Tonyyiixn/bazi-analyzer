@@ -560,7 +560,7 @@ def print_summary(reports):
             return None
 
     if "stability" in present:
-        span = 12 * len(arms)
+        span = max(12 * len(arms), 20)  # wide enough for the header even with one arm
         lines.append(f"{'stability':<36}{'agrees with itself':>{span}}{'matches gold':>{span}}")
         lines.append(f"  {'':<34}" + "".join(f"{a:>12}" for a in arms) * 2)
         labels = {

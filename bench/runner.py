@@ -229,12 +229,28 @@ def load_done(path):
     return done
 
 
+def call_cost(rec):
+    """Estimated $ for one recorded call, from score.py's price table (0 if unknown)."""
+    from bench.score import PRICES
+    price = PRICES.get(rec.get("model"))
+    u = rec.get("usage") or {}
+    if price is None:
+        return 0.0
+    return (u.get("input_tokens", 0) * price[0] + u.get("output_tokens", 0) * price[1]
+            + u.get("cache_read_input_tokens", 0) * price[2]
+            + u.get("cache_creation_input_tokens", 0) * price[3]) / 1e6
+
+
 async def run_arm(client, args, arm, questions, out_path):
     if arm == "engine":
         questions = [q for q in questions if q["suite"] == "edge"]
         if not args.live_geocode:
             install_offline_geocoder()
     done = load_done(out_path)
+    # Spend so far counts calls already in this arm's file, so a resumed run
+    # stays under the same --max-cost.
+    spent = {"usd": sum(call_cost(json.loads(line)) for line in out_path.open(encoding="utf-8"))
+             if out_path.exists() else 0.0, "skipped": 0}
     jobs = [
         (q, r) for q in questions
         for r in range(args.repeats or q["repeats"])
@@ -254,6 +270,9 @@ async def run_arm(client, args, arm, questions, out_path):
 
         async def one(q, repeat):
             async with sem:
+                if args.max_cost is not None and spent["usd"] >= args.max_cost:
+                    spent["skipped"] += 1  # left unrecorded, so re-running resumes here
+                    return
                 started = time.monotonic()
                 rec = {"id": q["id"], "set": args.set, "suite": q["suite"], "arm": arm,
                        "model": "engine" if arm == "engine" else args.model,
@@ -271,6 +290,7 @@ async def run_arm(client, args, arm, questions, out_path):
                 async with lock:
                     out.write(json.dumps(rec, ensure_ascii=False, default=str) + "\n")
                     out.flush()
+                    spent["usd"] += call_cost(rec)
                     counts["error" if rec["error"] else "ok"] += 1
                     n = counts["ok"] + counts["error"]
                     if rec["error"] or n % 10 == 0 or n == len(jobs):
@@ -281,6 +301,10 @@ async def run_arm(client, args, arm, questions, out_path):
         # parallel batch - otherwise every concurrent first call writes it.
         await one(*jobs[0])
         await asyncio.gather(*(one(q, r) for q, r in jobs[1:]))
+
+    print(f"[{arm}] est. spend in {out_path.name}: ${spent['usd']:.2f}"
+          + (f" - stopped at --max-cost ${args.max_cost:.2f}, {spent['skipped']} calls not run "
+             f"(re-run the same command to resume)" if spent["skipped"] else ""))
 
 
 async def dry_run(args, questions):
@@ -316,6 +340,9 @@ def main():
     parser.add_argument("--limit", type=int, help="first N questions per suite")
     parser.add_argument("--repeats", type=int, help="override every question's repeat count")
     parser.add_argument("--concurrency", type=int, default=4)
+    parser.add_argument("--max-cost", type=float,
+                        help="stop starting new calls once this arm's estimated spend (in $) reaches this; "
+                             "calls already in flight still finish")
     parser.add_argument("--live-geocode", action="store_true", help="use the real Nominatim geocoder in the MCP arm")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
