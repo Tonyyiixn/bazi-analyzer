@@ -140,14 +140,9 @@ def build_prompt(q):
     return f"{q['question']}\n\n{q['answer_format']}"
 
 
-def _add_usage(total, usage):
-    for key in ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"):
-        total[key] = total.get(key, 0) + (getattr(usage, key, None) or 0)
-
-
-async def ask(client, args, arm, q, tools: McpTools | None):
-    """Runs one question to completion. Returns the fields recorded per line."""
-    convo = [{"role": "user", "content": build_prompt(q)}]
+def build_request(args, arm, tools=None):
+    """Request settings shared by every call in an arm (all but `messages`),
+    so batched and normal calls are sent identically."""
     request = {
         "model": args.model,
         "max_tokens": MAX_TOKENS,
@@ -164,7 +159,18 @@ async def ask(client, args, arm, q, tools: McpTools | None):
         request["output_config"] = {"effort": args.effort}
     if tools:
         request["tools"] = tools.tools
+    return request
 
+
+def _add_usage(total, usage):
+    for key in ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"):
+        total[key] = total.get(key, 0) + (getattr(usage, key, None) or 0)
+
+
+async def ask(client, args, arm, q, tools: McpTools | None):
+    """Runs one question to completion. Returns the fields recorded per line."""
+    convo = [{"role": "user", "content": build_prompt(q)}]
+    request = build_request(args, arm, tools)
     usage, tool_calls = {}, []
     for _ in range(MAX_TOOL_ITERATIONS):
         response = await client.messages.create(messages=convo, **request)
@@ -189,6 +195,135 @@ async def ask(client, args, arm, q, tools: McpTools | None):
         convo.append({"role": "user", "content": results})
 
     return {"response": "", "stop_reason": "max_tool_iterations", "tool_calls": tool_calls, "usage": usage}
+
+
+# ---------------------------------------------------------------- batch mode
+#
+# --batch sends the claude arm through the Message Batches API: half price,
+# results within the hour (at most 24h). Only the claude arm qualifies - each
+# question is one request; an MCP question is a tool loop needing a round
+# trip per turn. Batch IDs are saved next to the results
+# (<arm>.batches.json), so re-running the same command picks up a pending
+# batch instead of paying to submit it again.
+
+BATCH_DISCOUNT = 0.5
+BATCH_POLL_SECONDS = 30
+BATCH_PILOT = 20  # with --max-cost: size of the first batch, used to measure cost per call
+
+
+def batch_custom_id(q, repeat):
+    return f"{q['id']}_r{repeat}"  # Batches accept [a-zA-Z0-9_-]{1,64}
+
+
+def batch_params(args, arm, q):
+    params = build_request(args, arm)
+    params.pop("cache_control")  # the system block's marker stays; nothing here reaches the cache minimum anyway
+    params["messages"] = [{"role": "user", "content": build_prompt(q)}]
+    return params
+
+
+def _batch_state(out_path):
+    path = out_path.with_name(f"{out_path.stem}.batches.json")
+    return path, (json.loads(path.read_text()) if path.exists() else [])
+
+
+def _save_batch_state(path, state):
+    path.write_text(json.dumps(state, indent=2) + "\n", newline="\n")
+
+
+def _submit_batch(client, args, arm, jobs, state, state_path):
+    from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
+    from anthropic.types.messages.batch_create_params import Request
+    batch = client.messages.batches.create(requests=[
+        Request(custom_id=batch_custom_id(q, r), params=MessageCreateParamsNonStreaming(**batch_params(args, arm, q)))
+        for q, r in jobs
+    ])
+    state.append({"batch_id": batch.id, "requests": len(jobs), "collected": False})
+    _save_batch_state(state_path, state)
+    print(f"[{arm}] submitted batch {batch.id} ({len(jobs)} requests). Safe to stop waiting: "
+          f"re-run the same command later to collect it.")
+    return state[-1]
+
+
+def _collect_batch(client, args, arm, entry, by_custom_id, out_path, state, state_path):
+    """Waits for one batch to end and appends its results. Returns $ spent."""
+    batch_id = entry["batch_id"]
+    while True:
+        batch = client.messages.batches.retrieve(batch_id)
+        if batch.processing_status == "ended":
+            break
+        c = batch.request_counts
+        print(f"[{arm}] batch {batch_id}: {c.succeeded + c.errored}/{entry['requests']} done, waiting...")
+        time.sleep(BATCH_POLL_SECONDS)
+
+    cost = 0.0
+    with out_path.open("a", encoding="utf-8") as out:
+        for result in client.messages.batches.results(batch_id):
+            q = by_custom_id[result.custom_id]
+            rec = {"id": q["id"], "set": args.set, "suite": q["suite"], "arm": arm, "model": args.model,
+                   "effort": args.effort, "repeat": int(result.custom_id.rsplit("_r", 1)[1]),
+                   "batch": True, "latency_s": None, "tool_calls": []}
+            r = result.result
+            if r.type == "succeeded":
+                usage = {}
+                _add_usage(usage, r.message.usage)
+                rec.update(response="".join(b.text for b in r.message.content if b.type == "text"),
+                           stop_reason=r.message.stop_reason, usage=usage, error=None)
+            else:  # errored / canceled / expired: not billed, retried on the next run
+                rec.update(response=None, stop_reason=None, usage={},
+                           error=f"batch {r.type}" + (f": {r.error}" if r.type == "errored" else ""))
+            out.write(json.dumps(rec, ensure_ascii=False, default=str) + "\n")
+            cost += call_cost(rec)
+    entry["collected"] = True
+    _save_batch_state(state_path, state)
+    c = batch.request_counts
+    print(f"[{arm}] batch {batch_id} collected: {c.succeeded} succeeded, {c.errored} errored, "
+          f"{c.expired} expired, ${cost:.3f}")
+    return cost
+
+
+def run_arm_batch(args, arm, questions, out_path):
+    client = anthropic.Anthropic()
+    state_path, state = _batch_state(out_path)
+    by_custom_id = {batch_custom_id(q, r): q for q in questions for r in range(args.repeats or q["repeats"])}
+
+    for entry in state:  # a batch from an earlier run that was never collected
+        if not entry["collected"]:
+            _collect_batch(client, args, arm, entry, by_custom_id, out_path, state, state_path)
+
+    done = load_done(out_path)
+    jobs = [(q, r) for q in questions for r in range(args.repeats or q["repeats"]) if (q["id"], r) not in done]
+    records = [json.loads(line) for line in out_path.open(encoding="utf-8")] if out_path.exists() else []
+    spent = sum(call_cost(rec) for rec in records)
+    print(f"[{arm}] batch mode: {len(jobs)} to run ({len(done)} already done) -> {out_path}")
+    if not jobs:
+        return
+
+    skipped = 0
+    if args.max_cost is None:
+        _collect_batch(client, args, arm, _submit_batch(client, args, arm, jobs, state, state_path),
+                       by_custom_id, out_path, state, state_path)
+    else:
+        # A batch's cost is only known once it ends, so measure cost per call
+        # on a small pilot first (or on calls already recorded), then submit
+        # only as many as fit under the cap.
+        priced = [rec for rec in records if not rec.get("error")]
+        if len(priced) < BATCH_PILOT and spent < args.max_cost:
+            pilot, jobs = jobs[:BATCH_PILOT], jobs[BATCH_PILOT:]
+            spent += _collect_batch(client, args, arm, _submit_batch(client, args, arm, pilot, state, state_path),
+                                    by_custom_id, out_path, state, state_path)
+            priced = [json.loads(line) for line in out_path.open(encoding="utf-8")]
+            priced = [rec for rec in priced if not rec.get("error")]
+        per_call = sum(call_cost(rec) for rec in priced) / len(priced) if priced else 0.0
+        # 10% headroom: answer lengths vary from question to question.
+        fit = len(jobs) if per_call == 0 else max(0, int((args.max_cost - spent) / (per_call * 1.1)))
+        jobs, skipped = jobs[:fit], len(jobs) - min(fit, len(jobs))
+        if jobs:
+            spent += _collect_batch(client, args, arm, _submit_batch(client, args, arm, jobs, state, state_path),
+                                    by_custom_id, out_path, state, state_path)
+
+    print(f"[{arm}] est. spend in {out_path.name}: ${spent:.3f} (batch prices)"
+          + (f" - {skipped} calls not run to stay under --max-cost ${args.max_cost:.2f}" if skipped else ""))
 
 
 # ---------------------------------------------------------------- driver
@@ -236,9 +371,10 @@ def call_cost(rec):
     u = rec.get("usage") or {}
     if price is None:
         return 0.0
-    return (u.get("input_tokens", 0) * price[0] + u.get("output_tokens", 0) * price[1]
+    cost = (u.get("input_tokens", 0) * price[0] + u.get("output_tokens", 0) * price[1]
             + u.get("cache_read_input_tokens", 0) * price[2]
             + u.get("cache_creation_input_tokens", 0) * price[3]) / 1e6
+    return cost * BATCH_DISCOUNT if rec.get("batch") else cost
 
 
 async def run_arm(client, args, arm, questions, out_path):
@@ -343,6 +479,9 @@ def main():
     parser.add_argument("--max-cost", type=float,
                         help="stop starting new calls once this arm's estimated spend (in $) reaches this; "
                              "calls already in flight still finish")
+    parser.add_argument("--batch", action="store_true",
+                        help="send the claude arm through the Message Batches API (half price, results within "
+                             "the hour, at most 24h); other arms run normally")
     parser.add_argument("--live-geocode", action="store_true", help="use the real Nominatim geocoder in the MCP arm")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -367,7 +506,10 @@ def main():
 
     async def all_arms():
         for arm in arms:
-            await run_arm(client, args, arm, questions, run_dir / f"{arm}.jsonl")
+            if args.batch and arm == "claude":
+                run_arm_batch(args, arm, questions, run_dir / f"{arm}.jsonl")
+            else:
+                await run_arm(client, args, arm, questions, run_dir / f"{arm}.jsonl")
 
     asyncio.run(all_arms())
 

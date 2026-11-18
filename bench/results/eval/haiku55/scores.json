@@ -25,8 +25,8 @@
       },
       "all": {
         "n": 90,
-        "accuracy": 0.5666666666666667,
-        "accuracy_tst_changes_chart": 0.5833333333333334,
+        "accuracy": 0.5777777777777777,
+        "accuracy_tst_changes_chart": 0.6666666666666666,
         "accuracy_tst_irrelevant": 0.5641025641025641
       },
       "stem_ten_god": {
@@ -37,33 +37,33 @@
       },
       "hidden_stems": {
         "n": 30,
-        "accuracy": 0.3333333333333333,
-        "accuracy_tst_changes_chart": 0.25,
+        "accuracy": 0.36666666666666664,
+        "accuracy_tst_changes_chart": 0.5,
         "accuracy_tst_irrelevant": 0.34615384615384615,
-        "partial_credit": 0.45555555555555555
+        "partial_credit": 0.4888888888888889
       }
     },
     "stability": {
       "groups": 10,
       "rows": {
         "core_repeated_ask": {
-          "agreement": 0.6,
-          "gold_match": 0.3333333333333333,
+          "agreement": 0.6333333333333333,
+          "gold_match": 0.36666666666666664,
           "answers": 30
         },
         "core_different_wordings": {
-          "agreement": 0.42000000000000004,
+          "agreement": 0.44000000000000006,
           "gold_match": 0.22,
           "answers": 50
         },
         "core_all_answers": {
-          "agreement": 0.42857142857142855,
-          "gold_match": 0.2714285714285714,
+          "agreement": 0.45714285714285713,
+          "gold_match": 0.2857142857142857,
           "answers": 70
         },
         "chart_facts": {
-          "agreement": 0.6142857142857142,
-          "gold_match": 0.5857142857142857,
+          "agreement": 0.6571428571428571,
+          "gold_match": 0.6285714285714286,
           "answers": 70
         },
         "method_verdict": {
@@ -72,15 +72,15 @@
           "answers": 70
         },
         "method_verdict_given_chart_right": {
-          "agreement": 0.635,
-          "gold_match": 0.4634146341463415,
-          "answers": 41
+          "agreement": 0.6399999999999999,
+          "gold_match": 0.45454545454545453,
+          "answers": 44
         }
       },
       "fields": {
         "day_pillar": {
-          "agreement": 0.6142857142857142,
-          "gold_match": 0.5857142857142857
+          "agreement": 0.6571428571428571,
+          "gold_match": 0.6285714285714286
         },
         "day_master_element": {
           "agreement": 0.7142857142857142,
@@ -144,11 +144,11 @@
       },
       "all": {
         "n": 80,
-        "macro_f1": 0.863452380952381,
-        "micro_precision": 0.864406779661017,
-        "micro_recall": 0.8595505617977528,
-        "micro_f1": 0.8619718309859155,
-        "exact_set_match": 0.75,
+        "macro_f1": 0.8842857142857143,
+        "micro_precision": 0.8674033149171271,
+        "micro_recall": 0.8820224719101124,
+        "micro_f1": 0.8746518105849583,
+        "exact_set_match": 0.7625,
         "invented_on_empty_charts": 0.25,
         "per_type": {
           "clash": {
@@ -163,18 +163,18 @@
           },
           "three_harmony": {
             "gold": 46,
-            "precision": 0.8913043478260869,
-            "recall": 0.8913043478260869
+            "precision": 0.8936170212765957,
+            "recall": 0.9130434782608695
           },
           "punishment": {
             "gold": 46,
-            "precision": 0.8604651162790697,
-            "recall": 0.8043478260869565
+            "precision": 0.8666666666666667,
+            "recall": 0.8478260869565217
           },
           "harm": {
             "gold": 24,
-            "precision": 0.8076923076923077,
-            "recall": 0.875
+            "precision": 0.8148148148148148,
+            "recall": 0.9166666666666666
           },
           "break": {
             "gold": 24,
@@ -185,11 +185,11 @@
       },
       "birth": {
         "n": 40,
-        "macro_f1": 0.7540476190476191,
-        "micro_precision": 0.7790697674418605,
-        "micro_recall": 0.7528089887640449,
-        "micro_f1": 0.7657142857142858,
-        "exact_set_match": 0.625,
+        "macro_f1": 0.7957142857142857,
+        "micro_precision": 0.7888888888888889,
+        "micro_recall": 0.797752808988764,
+        "micro_f1": 0.7932960893854749,
+        "exact_set_match": 0.65,
         "invented_on_empty_charts": 0.5,
         "per_type": {
           "clash": {
@@ -204,18 +204,18 @@
           },
           "three_harmony": {
             "gold": 23,
-            "precision": 0.8181818181818182,
-            "recall": 0.782608695652174
+            "precision": 0.8260869565217391,
+            "recall": 0.8260869565217391
           },
           "punishment": {
             "gold": 23,
-            "precision": 0.8888888888888888,
-            "recall": 0.6956521739130435
+            "precision": 0.9,
+            "recall": 0.782608695652174
           },
           "harm": {
             "gold": 12,
-            "precision": 0.6428571428571429,
-            "recall": 0.75
+            "precision": 0.6666666666666666,
+            "recall": 0.8333333333333334
           },
           "break": {
             "gold": 12,

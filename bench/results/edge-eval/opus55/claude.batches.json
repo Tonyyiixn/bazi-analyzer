@@ -1,0 +1,12 @@
+[
+  {
+    "batch_id": "msgbatch_01WkLc4z14Uw5CmMXXPYxomd",
+    "requests": 20,
+    "collected": true
+  },
+  {
+    "batch_id": "msgbatch_01UzxUvtHHjvsHttNVudAtHQ",
+    "requests": 40,
+    "collected": true
+  }
+]

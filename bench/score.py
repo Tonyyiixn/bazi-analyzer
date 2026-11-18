@@ -26,6 +26,8 @@ Run from the repo root:  python -m bench.score --run try1 [--set eval] [--failur
 """
 import argparse
 import json
+import re
+import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -125,11 +127,51 @@ def norm_elements(values):
     return frozenset(e for e in map(norm_element, values) if e)
 
 
+# The answer formats ask for "<stem>" / "<branch>" without naming a script,
+# so pinyin (with or without tone marks) is a fair answer too. Stems and
+# branches are looked up separately: "Wu" is 戊 as a stem but 午 as a branch.
+STEM_PINYIN = dict(zip(["jia", "yi", "bing", "ding", "wu", "ji", "geng", "xin", "ren", "gui"], STEMS))
+BRANCH_PINYIN = dict(zip(["zi", "chou", "yin", "mao", "chen", "si", "wu", "wei", "shen", "you", "xu", "hai"],
+                         BRANCH_ORDER))
+
+
+def _pinyin_words(value):
+    """'Jiǎ-Zǐ', 'JiaZi', 'jia zi' -> ['jia', 'zi']."""
+    plain = "".join(c for c in unicodedata.normalize("NFKD", value) if not unicodedata.combining(c))
+    return [w.lower() for w in re.findall(r"[A-Z][a-z]*|[a-z]+", plain)]
+
+
+def _norm_char(value, chars, pinyin):
+    if not isinstance(value, str):
+        return None
+    found = [c for c in value if c in chars]
+    if len(found) == 1:
+        return found[0]
+    words = [pinyin[w] for w in _pinyin_words(value) if w in pinyin]
+    return words[0] if len(words) == 1 else None
+
+
+def norm_stem(value):
+    return _norm_char(value, STEMS, STEM_PINYIN)
+
+
+def norm_branch(value):
+    return _norm_char(value, BRANCH_ORDER, BRANCH_PINYIN)
+
+
 def norm_pillar(value):
     if not isinstance(value, str):
         return None
     chars = [c for c in value if c in STEMS or c in BRANCH_ORDER]
-    return "".join(chars) if len(chars) == 2 else None
+    if len(chars) == 2:
+        return "".join(chars)
+    words = _pinyin_words(value)
+    if len(words) == 1:  # run together: "bingwu" -> bing + wu
+        words = next(([s, words[0][len(s):]] for s in STEM_PINYIN
+                      if words[0].startswith(s) and words[0][len(s):] in BRANCH_PINYIN), words)
+    if len(words) == 2 and words[0] in STEM_PINYIN and words[1] in BRANCH_PINYIN:
+        return STEM_PINYIN[words[0]] + BRANCH_PINYIN[words[1]]
+    return None
 
 
 def norm_interaction_key(ix):
@@ -139,8 +181,8 @@ def norm_interaction_key(ix):
     itype = INTERACTION_TYPE_NAMES.get(raw_type) or f"other({raw_type})"
     branches = ix.get("branches") or []
     if isinstance(branches, str):
-        branches = list(branches)
-    branches = sorted((b for b in branches if isinstance(b, str) and b in BRANCH_ORDER), key=BRANCH_ORDER.index)
+        branches = [c for c in branches if c in BRANCH_ORDER] or _pinyin_words(branches)
+    branches = sorted((b for b in map(norm_branch, branches) if b), key=BRANCH_ORDER.index)
     if itype == "punishment" and len(branches) == 1:
         branches *= 2  # self-punishment written with the branch once
     if not branches:
@@ -157,13 +199,13 @@ def grade_accuracy(q, parsed):
     if q["task"] == "stem_ten_god":
         return {
             "correct": norm_ten_god(parsed.get("ten_god")) == gold["ten_god"],
-            "stem_correct": parsed.get("stem") == gold["stem"],
+            "stem_correct": norm_stem(parsed.get("stem")) == gold["stem"],
         }
     if q["task"] == "hidden_stems":
         predicted = {}
         for h in parsed.get("hidden_stems") or []:
-            if isinstance(h, dict) and h.get("stem") in STEMS:
-                predicted[h["stem"]] = norm_ten_god(h.get("ten_god"))
+            if isinstance(h, dict) and norm_stem(h.get("stem")):
+                predicted[norm_stem(h["stem"])] = norm_ten_god(h.get("ten_god"))
         gold_map = {h["stem"]: h["ten_god"] for h in gold["hidden_stems"]}
         right = sum(predicted.get(stem) == god for stem, god in gold_map.items())
         return {
@@ -491,7 +533,7 @@ def score_arm(questions, path):
         elif cost is not None:
             cost += (u.get("input_tokens", 0) * price[0] + u.get("output_tokens", 0) * price[1]
                      + u.get("cache_read_input_tokens", 0) * price[2]
-                     + u.get("cache_creation_input_tokens", 0) * price[3]) / 1e6
+                     + u.get("cache_creation_input_tokens", 0) * price[3]) / 1e6 * (0.5 if rec.get("batch") else 1)
     total_input = sum(usage[k] for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
     report = {
         "calls": len(latest),
@@ -499,7 +541,8 @@ def score_arm(questions, path):
         "parse_failures": dict(parse_failures),
         "stop_reasons": dict(Counter(r.get("stop_reason") for r in ok)),
         "avg_tool_calls": mean(len(r.get("tool_calls") or []) for r in ok),
-        "avg_latency_s": mean(r["latency_s"] for r in ok),
+        # Batched calls have no meaningful latency (it'd be time spent queued).
+        "avg_latency_s": mean(r["latency_s"] for r in ok if r.get("latency_s") is not None),
         "tokens": dict(usage),
         "cache_read_share": usage["cache_read_input_tokens"] / total_input if total_input else None,
         "est_cost_usd": round(cost, 4) if cost is not None else None,
